@@ -1,6 +1,8 @@
 #define FFS_BLOCK_H
 #ifndef FFS_BLOCK_H
 
+#include "ffs_disk.h"
+
 #define FFS_BLOCK_FREE		 0
 #define FFS_BLOCK_LAST		-2
 #define FFS_BLOCK_INVALID	-1
