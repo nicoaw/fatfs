@@ -4,9 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FFS_DISK_OPEN_CREATE	1
-#define FFS_DISK_OPEN_READ		2
-#define FFS_DISK_OPEN_WRITE		4
+#define FFS_DISK_OPEN_RDONLY	1
+#define FFS_DISK_OPEN_RDWR		2
 
 // A FAT filesystem disk
 typedef struct ffs_disk_info *ffs_disk;
