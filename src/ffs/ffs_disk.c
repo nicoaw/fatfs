@@ -50,6 +50,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
     // Write superblock to be read when the disk is opened
     if(ffs_block_write(disk, FFS_BLOCK_SUPERBLOCK, superblock_buffer) != 0) {
+		free(superblock_buffer);
         return -1;
     }
 
@@ -68,8 +69,13 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
     // Write FAT block by block
     for(size_t i = 0; i < disk->superblock.fat_block_count; ++i) {
-        ffs_block_write(disk, FFS_BLOCK_FAT + i, ((char *) fat) + i * disk->block_size);
+        if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((char *) fat) + i * disk->block_size) != 0) {
+			free(fat);
+			return -1;
+		}
     }
+
+	free(fat);
 
 	// Setup root directory
 	time_t current_time = time(NULL);
@@ -92,16 +98,16 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
 ffs_disk ffs_disk_open(const char *path, int mode)
 {
-    ffs_disk disk = (ffs_disk) malloc(sizeof(ffs_disk_info));
-    if(!disk) {
-        return NULL;
-    }
-
     // Mode must be valid
     if(
         mode != FFS_DISK_OPEN_RDONLY &&
         mode != FFS_DISK_OPEN_RDWR
     ) {
+        return NULL;
+    }
+
+    ffs_disk disk = (ffs_disk) malloc(sizeof(ffs_disk_info));
+    if(!disk) {
         return NULL;
     }
 
@@ -113,6 +119,7 @@ ffs_disk ffs_disk_open(const char *path, int mode)
 
     // Disk file could not be opened
     if(!disk->file) {
+		free(disk);
         return NULL;
     }
 
@@ -122,6 +129,7 @@ ffs_disk ffs_disk_open(const char *path, int mode)
     // Need a buffer to store a block
     struct ffs_superblock *superblock_buffer = (struct ffs_superblock *) malloc(FFS_DISK_BLOCK_SIZE);
     if(!superblock_buffer) {
+		free(disk);
         return NULL;
     }
 
