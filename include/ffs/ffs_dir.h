@@ -9,16 +9,15 @@
 #define FFS_DIR_FILE			1
 
 // A FAT filesystem directory or file information
-struct ffs_directory
-{
-	char name[24];
-	uint64_t create_time;
-	uint64_t modify_time;
-	uint64_t access_time;
-	uint32_t length;
-	int32_t start_block;
-	int32_t flags;
-	int32_t unused;
+struct ffs_directory {
+    char name[24];
+    uint64_t create_time;
+    uint64_t modify_time;
+    uint64_t access_time;
+    uint32_t length;
+    int32_t start_block;
+    int32_t flags;
+    int32_t unused;
 };
 
 // Allocate space for a new child directory of specified parent address

@@ -12,13 +12,12 @@
 typedef struct ffs_disk_info *ffs_disk;
 
 // FAT filesystem superblock information
-struct ffs_superblock
-{
-	uint32_t magic;
-	uint32_t block_count;
-	uint32_t fat_block_count;
-	uint32_t block_size;
-	int32_t root_block;
+struct ffs_superblock {
+    uint32_t magic;
+    uint32_t block_count;
+    uint32_t fat_block_count;
+    uint32_t block_size;
+    int32_t root_block;
 };
 
 // Close a FAT filesystem disk
@@ -33,7 +32,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count);
 // Returns disk on success; otherwise, returns NULL
 ffs_disk ffs_disk_open(const char *path, int mode);
 
-// Get FAT filesystem superbloc for specified disk
+// Get FAT filesystem superblock for specified disk
 // Returns superblock on success; otherwise, returns NULL
 const struct ffs_superblock *ffs_disk_superblock(const ffs_disk disk);
 
