@@ -3,10 +3,11 @@
 
 #include "ffs_disk.h"
 
-#define FFS_DIR_ROOT_ADDRESS	0
+#define FFS_DIR_ADDRESS_INVALID	-1
+#define FFS_DIR_ADDRESS_ROOT	 0
 
-#define FFS_DIR_DIRECTORY		0
-#define FFS_DIR_FILE			1
+#define FFS_DIR_DIRECTORY		 0
+#define FFS_DIR_FILE			 1
 
 // A FAT filesystem directory or file information
 struct ffs_directory {
@@ -21,7 +22,7 @@ struct ffs_directory {
 };
 
 // Allocate space for a new child directory of specified parent address
-// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ROOT_ADDRESS
+// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 size_t ffs_dir_alloc(ffs_disk disk, size_t parent_address);
 
 // Free space in parent directory by removing specified directory address
@@ -31,7 +32,7 @@ int ffs_dir_free(ffs_disk disk, size_t parent_address, size_t address);
 
 // Get address for directory pointed to by path, starting at specified start address
 // Path must be relative to specified start address
-// Returns address on success; otherwise, returns FFS_DIR_ROOT_ADDRESS
+// Returns address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 size_t ffs_dir_path(ffs_disk disk, size_t start_address, const char *path);
 
 // Read directory information from specified address

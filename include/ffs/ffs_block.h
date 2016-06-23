@@ -3,9 +3,12 @@
 
 #include "ffs_disk.h"
 
-#define FFS_BLOCK_FREE		 0
-#define FFS_BLOCK_LAST		-2
-#define FFS_BLOCK_INVALID	-1
+#define FFS_BLOCK_FREE			 0
+#define FFS_BLOCK_LAST			-2
+#define FFS_BLOCK_INVALID		-1
+
+#define FFS_BLOCK_SUPERBLOCK	 0
+#define FFS_BLOCK_FAT			 (FFS_BLOCK_SUPERBLOCK + 1)
 
 // Allocate a new block after specified block
 // If specified block is FFS_BLOCK_LAST then newly allocated block is first
