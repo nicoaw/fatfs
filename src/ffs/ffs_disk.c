@@ -41,7 +41,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
     disk->superblock.fat_block_count = fat_size / disk->disk_size + (fat_size % disk->disk_size > 0);
 
     // Need a buffer to store a block
-    struct ffs_superblock *superblock_buffer = (struct ffs_superblock *) malloc(FFS_DISK_BLOCK_SIZE);
+    struct ffs_superblock *superblock_buffer = malloc(FFS_DISK_BLOCK_SIZE);
     if(!superblock_buffer) {
         return -1;
     }
@@ -58,7 +58,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
     const size_t invalid_block_count = 1 + disk->superblock.fat_block_count;
 
-    int32_t *fat = (int32_t *) calloc(disk->superblock.block_count, sizeof(int32_t));
+    int32_t *fat = calloc(disk->superblock.block_count, sizeof(int32_t));
     if(!fat) {
         return -1;
     }
@@ -106,7 +106,7 @@ ffs_disk ffs_disk_open(const char *path, int mode)
         return NULL;
     }
 
-    ffs_disk disk = (ffs_disk) malloc(sizeof(ffs_disk_info));
+    ffs_disk disk = malloc(sizeof(ffs_disk_info));
     if(!disk) {
         return NULL;
     }
@@ -127,7 +127,7 @@ ffs_disk ffs_disk_open(const char *path, int mode)
     disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
 
     // Need a buffer to store a block
-    struct ffs_superblock *superblock_buffer = (struct ffs_superblock *) malloc(FFS_DISK_BLOCK_SIZE);
+    struct ffs_superblock *superblock_buffer = malloc(FFS_DISK_BLOCK_SIZE);
     if(!superblock_buffer) {
 		free(disk);
         return NULL;
