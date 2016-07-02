@@ -3,11 +3,16 @@
 
 #include "ffs_disk.h"
 
-#define FFS_DIR_ADDRESS_INVALID	-1
-#define FFS_DIR_ADDRESS_ROOT	 0
-
 #define FFS_DIR_DIRECTORY		 0
 #define FFS_DIR_FILE			 1
+
+// An pointer to a FAT filesystem directory
+typedef struct {
+	int block;
+	int directory_index;
+} ffs_address;
+
+const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, -1};
 
 // A FAT filesystem directory or file information
 struct ffs_directory {
@@ -23,24 +28,28 @@ struct ffs_directory {
 
 // Allocate space for a new child directory of specified parent address
 // Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-size_t ffs_dir_alloc(ffs_disk disk, size_t parent_address);
+ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address);
 
 // Free space in parent directory by removing specified directory address
 // Directory to be freed must be a child of parent directory
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_free(ffs_disk disk, size_t parent_address, size_t address);
+int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address);
+
+// Get next sibling address, not guaranteed to be allocated
+// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address);
 
 // Get address for directory pointed to by path, starting at specified start address
 // Path must be relative to specified start address
-// Returns address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-size_t ffs_dir_path(ffs_disk disk, size_t start_address, const char *path);
+// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *path);
 
 // Read directory information from specified address
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_read(ffs_disk disk, size_t address, struct ffs_directory *directory);
+int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory);
 
 // Write directory information to specified address
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_write(ffs_disk disk, size_t address, const struct ffs_directory *directory);
+int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory);
 
 #endif
