@@ -140,3 +140,57 @@ ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
 
 	return sibling_address;
 }
+
+int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory)
+{
+	if(ffs_dir_address_valid(address) != 0) {
+		return -1;
+	}
+
+    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+    if(!superblock) {
+        return -1;
+    }
+
+	// Read block directory is in
+	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
+	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
+		free(directory_buffer):
+		return -1;
+	}
+
+	*directory = *(directory_buffer + address.directory_index);
+
+	free(directory_buffer);
+	return 0;
+}
+
+int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory)
+{
+	if(ffs_dir_address_valid(address) != 0) {
+		return -1;
+	}
+
+    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+    if(!superblock) {
+        return -1;
+    }
+
+	// Read block directory is in
+	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
+	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
+		free(directory_buffer):
+		return -1;
+	}
+	
+	*(directory_buffer + address.directory_index) = *directory;
+
+	// Write updated block
+	if(ffs_block_write(disk, address.block, directory_buffer) != 0) {
+		free(directory_buffer):
+		return -1;
+	}
+
+	free(directory_buffer):
+	return 0;
+}
