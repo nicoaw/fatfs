@@ -31,7 +31,8 @@ struct ffs_directory {
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address);
 
 // Free space in parent directory by removing specified directory address
-// Directory to be freed must be a child of parent directory
+// Directory must be a child of parent directory
+// Directory data will not be freed, use ffs_block_free on its start block
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address);
 
