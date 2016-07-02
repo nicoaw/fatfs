@@ -14,7 +14,7 @@ static int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 
     const size_t block_directory_count = superblock->block_size / sizeof(struct ffs_directory);
 
-    return address.block == FFS_DIR_ADDRESS_INVALID.block || address.directory_index >= 0 || address.directory_index < block_directory_count ? 0 : -1;
+    return address.block == FFS_BLOCK_LAST || address.block == FFS_BLOCK_INVALID || address.directory_index >= 0 || address.directory_index < block_directory_count ? 0 : -1;
 }
 
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
@@ -122,4 +122,21 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
     }
 
 	return 0;
+}
+
+ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
+{
+	if(ffs_dir_address_valid(sibling_address) != 0) {
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	++sibling_address.directory_index;
+
+	// If new directory index is invalid then next directory is in the next block
+	if(ffs_dir_address_valid(sibling_address) != 0) {
+		sibling_address.block = ffs_block_next(disk, sibling_address.block);
+		sibling_address.directory_index = 0;
+	}
+
+	return sibling_address;
 }
