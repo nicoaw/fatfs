@@ -94,6 +94,7 @@ int ffs_block_free(ffs_disk disk, int parent_block, int block)
 	}
 
 	// Free child blocks in block list
+	// Doesn't use block_next for effeciency, but might be wise since DRY
 	int fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
 	size_t fat_entry = FFS_BLOCK_FAT_ENTRY(superblock->block_size, block);
 	int next_block;
@@ -123,4 +124,29 @@ int ffs_block_free(ffs_disk disk, int parent_block, int block)
 
 	free(fat);
 	return -1;
+}
+
+int ffs_block_next(ffs_disk disk, int block)
+{
+	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
+		return FFS_BLOCK_LAST;
+	}
+
+    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+    if(!superblock) {
+        return FFS_BLOCK_INVALID;
+    }
+
+	const int fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
+
+	int32_t *fat = malloc(superblock->block_size);
+	if(ffs_block_read(disk, fat_block, fat) != 0) {
+		free(fat);
+		return FFS_BLOCK_LAST;
+	}
+
+	// Get next block according to FAT
+	int next_block = fat[FFS_BLOCK_FAT_ENTRY(superblock->block_size, block)];
+	free(fat);
+	return next_block;
 }
