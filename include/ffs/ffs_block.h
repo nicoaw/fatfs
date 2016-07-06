@@ -13,11 +13,12 @@
 // Allocate a new block after specified block
 // If specified block is FFS_BLOCK_LAST then newly allocated block is first
 // Returns new block on success; otherwise, returns FFS_BLOCK_INVALID
-int ffs_block_alloc(ffs_disk disk, int previous_block);
+int ffs_block_alloc(ffs_disk disk, int parent_block);
 
 // Mark all blocks in the block list starting at specified block as FFS_BLOCK_FREE
+// If parent block is FFS_BLOCK_INVALID, block is assumed to have no parent
 // Returns zero on success; otherwise, returns non-zero
-int ffs_block_free(ffs_disk disk, int block);
+int ffs_block_free(ffs_disk disk, int parent_block, int block);
 
 // Get the next block in the block list
 // Returns next block on success; otherwise, returns FFS_BLOCK_LAST
