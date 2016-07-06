@@ -12,6 +12,7 @@ struct ffs_disk_info {
     struct ffs_superblock superblock;
 };
 
+// Must be defined here because ffs_disk is defined here
 int ffs_block_read(ffs_disk disk, int block, void *buffer)
 {
 	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
@@ -23,11 +24,38 @@ int ffs_block_read(ffs_disk disk, int block, void *buffer)
         return -1;
     }
 
+	// Seek to block position
 	if(fseek(disk->file, block * superblock->block_size, SEEK_SET) != 0) {
 		return -1;
 	}
 
+	// Read entire block
 	if(fread(buffer, superblock->block_size, 1, disk->file) != superblock->block_size) {
+		return -1;
+	}
+
+	return 0;
+}
+
+// Must be defined here because ffs_disk is defined here
+int ffs_block_write(ffs_disk disk, int block, const void *buffer)
+{
+	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
+		return -1;
+	}
+
+    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+    if(!superblock) {
+        return -1;
+    }
+
+	// Seek to block position
+	if(fseek(disk->file, block * superblock->block_size, SEEK_SET) != 0) {
+		return -1;
+	}
+
+	// Read entire block
+	if(fwrite(buffer, superblock->block_size, 1, disk->file) != superblock->block_size) {
 		return -1;
 	}
 
