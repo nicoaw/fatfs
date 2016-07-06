@@ -12,6 +12,28 @@ struct ffs_disk_info {
     struct ffs_superblock superblock;
 };
 
+int ffs_block_read(ffs_disk disk, int block, void *buffer)
+{
+	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
+		return -1;
+	}
+
+    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+    if(!superblock) {
+        return -1;
+    }
+
+	if(fseek(disk->file, block * superblock->block_size, SEEK_SET) != 0) {
+		return -1;
+	}
+
+	if(fread(buffer, superblock->block_size, 1, disk->file) != superblock->block_size) {
+		return -1;
+	}
+
+	return 0;
+}
+
 int ffs_disk_close(ffs_disk disk)
 {
     // Disk must not be NULL

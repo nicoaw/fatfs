@@ -134,7 +134,7 @@ int ffs_block_next(ffs_disk disk, int block)
 
     const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
     if(!superblock) {
-        return FFS_BLOCK_INVALID;
+        return FFS_BLOCK_LAST;
     }
 
 	const int fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
