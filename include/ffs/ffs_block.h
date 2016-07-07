@@ -1,5 +1,5 @@
-#define FFS_BLOCK_H
 #ifndef FFS_BLOCK_H
+#define FFS_BLOCK_H
 
 #include "ffs_disk.h"
 

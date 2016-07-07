@@ -1,4 +1,5 @@
 #include <ffs/ffs_block.h>
+#include <ffs/ffs_dir.h>
 #include <ffs/ffs_disk.h>
 #include <time.h>
 #include <stdio.h>
@@ -88,7 +89,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
     disk->superblock.magic = 0x2345beef;
     disk->superblock.block_count = block_count;
     disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
-    disk->superblock.fat_block_count = fat_size / disk->disk_size + (fat_size % disk->disk_size > 0);
+    disk->superblock.fat_block_count = fat_size / disk->superblock.block_size + (fat_size % disk->superblock.block_size > 0);
 
     // Need a buffer to store a block
     struct ffs_superblock *superblock_buffer = malloc(FFS_DISK_BLOCK_SIZE);
@@ -119,7 +120,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
     // Write FAT block by block
     for(size_t i = 0; i < disk->superblock.fat_block_count; ++i) {
-        if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((char *) fat) + i * disk->block_size) != 0) {
+        if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((char *) fat) + i * disk->superblock.block_size) != 0) {
 			free(fat);
 			return -1;
 		}
@@ -130,7 +131,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 	// Setup root directory
 	time_t current_time = time(NULL);
     struct ffs_directory root_directory = {
-		.name = "/";
+		.name = "/",
 		.create_time = current_time,
 		.modify_time = current_time,
 		.access_time = current_time,
@@ -139,7 +140,8 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 		.unused = 0
     };
 
-	if(ffs_dir_write(disk, FFS_DIR_ADDRESS_ROOT, &root_directory) != 0) {
+	ffs_address root_address = {disk->superblock.root_block, 0};
+	if(ffs_dir_write(disk, root_address, &root_directory) != 0) {
 		return -1;
 	}
 
@@ -156,7 +158,7 @@ ffs_disk ffs_disk_open(const char *path, int mode)
         return NULL;
     }
 
-    ffs_disk disk = malloc(sizeof(ffs_disk_info));
+    ffs_disk disk = malloc(sizeof(struct ffs_disk_info));
     if(!disk) {
         return NULL;
     }

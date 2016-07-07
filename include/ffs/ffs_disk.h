@@ -1,5 +1,5 @@
-#define FFS_DISK_H
 #ifndef FFS_DISK_H
+#define FFS_DISK_H
 
 #include <stddef.h>
 #include <stdint.h>

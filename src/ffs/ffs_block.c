@@ -1,8 +1,9 @@
 #include <ffs/ffs_block.h>
+#include <stdlib.h>
 
 #define FFS_BLOCK_FAT_ENTRY_COUNT(block_size)	(block_size / sizeof(int32_t))
-#define FFS_BLOCK_FAT_BLOCK(block_size, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT)
-#define FFS_BLOCK_FAT_ENTRY(block_size, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT)
+#define FFS_BLOCK_FAT_BLOCK(block_size, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
+#define FFS_BLOCK_FAT_ENTRY(block_size, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
 
 int ffs_block_alloc(ffs_disk disk, int parent_block)
 {
@@ -14,6 +15,8 @@ int ffs_block_alloc(ffs_disk disk, int parent_block)
     if(!superblock) {
         return FFS_BLOCK_INVALID;
     }
+
+	const size_t fat_block_entry_count = FFS_BLOCK_FAT_ENTRY_COUNT(superblock->block_size);
 
 	// Find a free block using FAT
 	int32_t *fat = malloc(superblock->block_size);
@@ -28,7 +31,7 @@ int ffs_block_alloc(ffs_disk disk, int parent_block)
 		for(size_t j = 0; j < fat_block_entry_count; ++j) {
 			// Found free block
 			if(fat[j] == FFS_BLOCK_FREE) {
-				const int block = j + i * FFS_BLOCK_FAT_ENTRY_COUNT(superblock->block_size);
+				const int block = j + i * fat_block_entry_count;
 				fat[j] = FFS_BLOCK_LAST;
 
 				if(ffs_block_write(disk, fat_block, fat) != 0) {
