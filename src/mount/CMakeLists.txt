@@ -1,5 +1,8 @@
 file(GLOB_RECURSE sources *.c *.h)
-set(libraries ${CMAKE_BINARY_DIR}/lib/ffs fuse rt)
+set(libraries
+	ffs
+	fuse
+	rt)
 
 add_executable(ffs-mount ${sources})
 target_link_libraries(ffs-mount ${libraries})
