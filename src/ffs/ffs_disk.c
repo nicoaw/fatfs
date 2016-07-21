@@ -31,7 +31,7 @@ int ffs_block_read(ffs_disk disk, int block, void *buffer)
 	}
 
 	// Read entire block
-	if(fread(buffer, superblock->block_size, 1, disk->file) != superblock->block_size) {
+	if(fread(buffer, superblock->block_size, 1, disk->file) != 1) {
 		return -1;
 	}
 
@@ -56,7 +56,7 @@ int ffs_block_write(ffs_disk disk, int block, const void *buffer)
 	}
 
 	// Read entire block
-	if(fwrite(buffer, superblock->block_size, 1, disk->file) != superblock->block_size) {
+	if(fwrite(buffer, superblock->block_size, 1, disk->file) != 1) {
 		return -1;
 	}
 
@@ -150,24 +150,23 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
 ffs_disk ffs_disk_open(const char *path, int mode)
 {
-    // Mode must be valid
-    if(
-        mode != FFS_DISK_OPEN_RDONLY &&
-        mode != FFS_DISK_OPEN_RDWR
-    ) {
-        return NULL;
-    }
-
     ffs_disk disk = malloc(sizeof(struct ffs_disk_info));
     if(!disk) {
         return NULL;
     }
 
-    // Find corresponding mode for fopen
-    char fmode[] = "r+";
-    fmode[mode] = '\0';
-
-    disk->file = fopen(path, fmode);
+	// Open disk file with correct mode
+	switch(mode) {
+		case FFS_DISK_OPEN_RDONLY:
+			disk->file = fopen(path, "r+");
+			break;
+		case FFS_DISK_OPEN_RDWR:
+			disk->file = fopen(path, "w+");
+			break;
+		default:
+			free(disk);
+			return NULL;
+	}
 
     // Disk file could not be opened
     if(!disk->file) {

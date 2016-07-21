@@ -12,7 +12,7 @@ typedef struct {
 	int directory_index;
 } ffs_address;
 
-const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, -1};
+extern const ffs_address FFS_DIR_ADDRESS_INVALID;
 
 // A FAT filesystem directory or file information
 struct ffs_directory {

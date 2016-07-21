@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, -1};
+
 // Check if address is valid
 // Returns zero on success; otherwise, returns non-zero
 static int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
