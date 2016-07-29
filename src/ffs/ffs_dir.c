@@ -5,15 +5,11 @@
 
 const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, -1};
 
-// Check if address is valid
-// Returns zero on success; otherwise, returns non-zero
-static int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
-
 // Recursively find path address in parent directory starting with name
 // Returns address of path on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name);
 
-static int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
+int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 {
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {

@@ -53,6 +53,10 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 // Returns root address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_root(ffs_disk disk);
 
+// Check if address is valid
+// Returns zero on success; otherwise, returns non-zero
+int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
+
 // Write directory information to specified address
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory);
