@@ -217,6 +217,17 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 	return 0;
 }
 
+ffs_address ffs_dir_root(ffs_disk disk)
+{
+	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+	if(!superblock) {
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+	
+	ffs_address address = {superblock->root_block, 0};
+	return address;
+}
+
 int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory)
 {
 	if(ffs_dir_address_valid(disk, address) != 0) {

@@ -49,6 +49,10 @@ ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *p
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory);
 
+// Get root address
+// Returns root address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_root(ffs_disk disk);
+
 // Write directory information to specified address
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory);
