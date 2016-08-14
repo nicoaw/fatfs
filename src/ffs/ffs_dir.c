@@ -1,4 +1,5 @@
 #include <ffs/ffs_block.h>
+#include <ffs/ffs_debug.h>
 #include <ffs/ffs_dir.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,8 +12,11 @@ static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, 
 
 int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 {
+	FFS_LOG("disk=%p address={block=%d directory_index=%d}", disk, address.block, address.directory_index);
+
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
+		FFS_ERR("superblock retrieval failed");
 		return -1;
 	}
 
@@ -23,13 +27,17 @@ int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 {
+	FFS_LOG("disk=%p parent_address={block=%d directory_index=%d}", disk, parent_address.block, parent_address.directory_index);
+
 	if(ffs_dir_address_valid(disk, parent_address) != 0) {
+		FFS_ERR("parent address invalid");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
 	// Need parent directory to allocate new child directory
 	struct ffs_directory parent_directory;
 	if(ffs_dir_read(disk, parent_address, &parent_directory) != 0) {
+		FFS_ERR("parent directory read failed");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
@@ -52,12 +60,14 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 	}
 
 	if(ffs_dir_address_valid(disk, address) != 0) {
+		FFS_ERR("allocated address invalid");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
 	// Need to update parent directory length (and possibly start block)
 	parent_directory.length += sizeof(struct ffs_directory);
 	if(ffs_dir_write(disk, parent_address, &parent_directory) != 0) {
+		FFS_ERR("parent directory write failed");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
@@ -66,13 +76,17 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 
 int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 {
+	FFS_LOG("disk=%p parent_address={block=%d directory_index=%d} address={block=%d directory_index=%d}", disk, parent_address.block, parent_address.directory_index, address.block, address.directory_index);
+
 	if(ffs_dir_address_valid(disk, parent_address) != 0 || ffs_dir_address_valid(disk, address) != 0) {
+		FFS_ERR("specified addresses invalid");
 		return -1;
 	}
 
 	// Need parent directory to allocate new child directory
 	struct ffs_directory parent_directory;
 	if(ffs_dir_read(disk, parent_address, &parent_directory) != 0) {
+		FFS_ERR("specified addresses invalid");
 		return -1;
 	}
 
@@ -91,22 +105,26 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 	}
 
 	if(!found_address || ffs_dir_address_valid(disk, last_address) != 0) {
+		FFS_ERR("address not found or last address invalid");
 		return -1;
 	}
 
 	// Need to perserve last directory information
 	struct ffs_directory last_directory;
 	if(ffs_dir_read(disk, last_address, &last_directory) != 0) {
+		FFS_ERR("last directory read failed");
 		return -1;
 	}
 
 	if(ffs_dir_write(disk, address, &last_directory) != 0) {
+		FFS_ERR("swapped last directory write failed");
 		return -1;
 	}
 
 	// Free last block since last address was first in block
 	if(last_address.directory_index == 0) {
 		if(ffs_block_free(disk, last_block_parent, last_address.block) != 0) {
+			FFS_ERR("last block free failed");
 			return -1;
 		}
 	}
@@ -119,62 +137,19 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 
 	// Need to update parent directory length (and possibly start block)
 	if(ffs_dir_write(disk, parent_address, &parent_directory) != 0) {
+		FFS_ERR("parent directory write failed");
 		return -1;
 	}
 
 	return 0;
 }
 
-ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *path)
-{
-	// Need mutable path for strtok
-	char *mutable_path = calloc(strlen(path) + 1, sizeof(char));
-	strcpy(mutable_path, path);
-
-	const char *name = strtok(mutable_path, "/");
-	return ffs_dir_path_impl(disk, start_address, name);
-}
-
-static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
-{
-	if(ffs_dir_address_valid(disk, parent_address) != 0) {
-		return FFS_DIR_ADDRESS_INVALID;
-	}
-
-	// Need parent directory to find directory with specified name
-	struct ffs_directory parent_directory;
-	if(ffs_dir_read(disk, parent_address, &parent_directory) != 0) {
-		return FFS_DIR_ADDRESS_INVALID;
-	}
-
-	ffs_address address = {parent_directory.start_block, 0};
-	for(size_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
-		struct ffs_directory directory;
-		if(ffs_dir_read(disk, address, &directory) != 0) {
-			return FFS_DIR_ADDRESS_INVALID;
-		}
-
-		// Found directory with specified name
-		if(strcmp(directory.name, name) == 0) {
-			const char *child_name = strtok(NULL, "/");
-
-			// Done searching
-			if(child_name == NULL) {
-				return address;
-			}
-
-			return ffs_dir_path_impl(disk, address, child_name);
-		}
-
-		address = ffs_dir_next(disk, address);
-	}
-
-	return FFS_DIR_ADDRESS_INVALID;
-}
-
 ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
 {
+	FFS_LOG("disk=%p sibling_address={block=%d directory_index=%d}", disk, sibling_address.block, sibling_address.directory_index);
+
 	if(ffs_dir_address_valid(disk, sibling_address) != 0) {
+		FFS_ERR("specified sibling address invalid");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
@@ -189,22 +164,81 @@ ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
 	return sibling_address;
 }
 
+ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *path)
+{
+	FFS_LOG("disk=%p start_address={block=%d directory_index=%d} path=%s", disk, start_address.block, start_address.directory_index, path);
+
+	// Need mutable path for strtok
+	char *mutable_path = calloc(strlen(path) + 1, sizeof(char));
+	strcpy(mutable_path, path);
+
+	const char *name = strtok(mutable_path, "/");
+	return ffs_dir_path_impl(disk, start_address, name);
+}
+
+static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
+{
+	FFS_LOG("disk=%p parent_address={block=%d directory_index=%d} name=%s", disk, parent_address.block, parent_address.directory_index, name);
+
+	if(ffs_dir_address_valid(disk, parent_address) != 0) {
+		FFS_ERR("parent address invalid");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	// Parent address is pointed to by path (ie. done searching)
+	if(!name) {
+		return parent_address;
+	}
+
+	// Need parent directory to find directory with specified name
+	struct ffs_directory parent_directory;
+	if(ffs_dir_read(disk, parent_address, &parent_directory) != 0) {
+		FFS_ERR("parent directory read failed");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	ffs_address address = {parent_directory.start_block, 0};
+	for(size_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
+		struct ffs_directory directory;
+		if(ffs_dir_read(disk, address, &directory) != 0) {
+			FFS_ERR("directory read failed");
+			return FFS_DIR_ADDRESS_INVALID;
+		}
+
+		// Found directory with specified name
+		if(strcmp(directory.name, name) == 0) {
+			const char *child_name = strtok(NULL, "/");
+			return ffs_dir_path_impl(disk, address, child_name);
+		}
+
+		address = ffs_dir_next(disk, address);
+	}
+
+	FFS_ERR("No address found");
+	return FFS_DIR_ADDRESS_INVALID;
+}
+
 int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory)
 {
+	FFS_LOG("disk=%p address={block=%d directory_index=%d} directory=%p", disk, address.block, address.directory_index, directory);
+
 	if(ffs_dir_address_valid(disk, address) != 0) {
+		FFS_ERR("specified address invalid");
 		return -1;
 	}
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
+		FFS_ERR("superblock retrieval failed");
 		return -1;
 	}
 
 	// Read block directory is in
 	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
 	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
-			free(directory_buffer);
-			return -1;
+		free(directory_buffer);
+		FFS_ERR("block read failed");
+		return -1;
 	}
 
 	*directory = *(directory_buffer + address.directory_index);
@@ -215,8 +249,11 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 
 ffs_address ffs_dir_root(ffs_disk disk)
 {
+	FFS_LOG("disk=%p", disk);
+
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
+		FFS_ERR("superblock retrieval failed");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 	
@@ -226,12 +263,16 @@ ffs_address ffs_dir_root(ffs_disk disk)
 
 int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory)
 {
+	FFS_LOG("disk=%p address={block=%d directory_index=%d} directory=%p", disk, address.block, address.directory_index, directory);
+
 	if(ffs_dir_address_valid(disk, address) != 0) {
+		FFS_ERR("specified address invalid");
 		return -1;
 	}
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
+		FFS_ERR("superblock retrieval failed");
 		return -1;
 	}
 
@@ -239,6 +280,7 @@ int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory
 	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
 	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
 		free(directory_buffer);
+		FFS_ERR("block read failed");
 		return -1;
 	}
 
@@ -247,6 +289,7 @@ int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory
 	// Write updated block
 	if(ffs_block_write(disk, address.block, directory_buffer) != 0) {
 		free(directory_buffer);
+		FFS_ERR("block write failed");
 		return -1;
 	}
 

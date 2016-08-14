@@ -26,6 +26,10 @@ struct ffs_directory {
     int32_t unused;
 };
 
+// Check if address is valid
+// Returns zero on success; otherwise, returns non-zero
+int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
+
 // Allocate space for a new child directory of specified parent address
 // Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address);
@@ -52,10 +56,6 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 // Get root address
 // Returns root address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_root(ffs_disk disk);
-
-// Check if address is valid
-// Returns zero on success; otherwise, returns non-zero
-int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
 
 // Write directory information to specified address
 // Returns zero on success; otherwise, returns non-zero
