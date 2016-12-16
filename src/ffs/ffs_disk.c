@@ -37,9 +37,7 @@ int ffs_block_read(ffs_disk disk, int block, void *buffer)
 	}
 
 	// Read entire block
-	int res = fread(buffer, superblock->block_size, 1, disk->file);
-	//if(fread(buffer, superblock->block_size, 1, disk->file) != 1) {
-	if(res != 1) {
+	if(fread(buffer, superblock->block_size, 1, disk->file) != 1) {
 		FFS_ERR("block read failed");
 		return -1;
 	}
@@ -111,9 +109,20 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
     disk->superblock.block_count = block_count;
     disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
     disk->superblock.fat_block_count = fat_size / disk->superblock.block_size + (fat_size % disk->superblock.block_size > 0);
+	disk->superblock.root_block = 1 + disk->superblock.fat_block_count;
+
+	char *buffer = malloc(disk->superblock.block_size);
+	for(size_t i = 0; i < disk->superblock.block_size; ++i) {
+		buffer[i] = 0;
+	}
+
+	for(size_t i = 0; i < disk->superblock.block_count; ++i) {
+		ffs_block_write(disk, i, buffer);
+	}
+	free(buffer);
 
     // Need a buffer to store a block
-    struct ffs_superblock *superblock_buffer = malloc(FFS_DISK_BLOCK_SIZE);
+    struct ffs_superblock *superblock_buffer = malloc(disk->superblock.block_size);
     if(!superblock_buffer) {
 		FFS_ERR("superblock buffer allocation failed");
         return -1;
@@ -129,6 +138,19 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
     }
 
     free(superblock_buffer);
+
+	FFS_LOG("superblock:\n"
+			"\tmagic=%d\n"
+			"\tblock_count=%d\n"
+			"\tfat_block_count=%d\n"
+			"\tblock_size=%d\n"
+			"\troot_block=%d\n",
+			disk->superblock.magic,
+			disk->superblock.block_count,
+			disk->superblock.fat_block_count,
+			disk->superblock.block_size,
+			disk->superblock.root_block
+		   );
 
     const size_t invalid_block_count = 1 + disk->superblock.fat_block_count;
 
@@ -165,7 +187,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 		.unused = 0
     };
 
-	ffs_address root_address = {disk->superblock.root_block, 0};
+	ffs_address root_address = ffs_dir_root(disk);
 	if(ffs_dir_write(disk, root_address, &root_directory) != 0) {
 		FFS_ERR("root directory write failed");
 		return -1;
@@ -222,6 +244,19 @@ ffs_disk ffs_disk_open(const char *path, int mode)
 
     free(superblock_buffer);
     disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
+
+	FFS_LOG("superblock:\n"
+			"\tmagic=%d\n"
+			"\tblock_count=%d\n"
+			"\tfat_block_count=%d\n"
+			"\tblock_size=%d\n"
+			"\troot_block=%d\n",
+			disk->superblock.magic,
+			disk->superblock.block_count,
+			disk->superblock.fat_block_count,
+			disk->superblock.block_size,
+			disk->superblock.root_block
+		   );
 
     return disk;
 }

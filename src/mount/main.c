@@ -101,7 +101,6 @@ static int ffs_getattr(const char *path, struct stat *stats)
 	stats->st_gid = getgid();
 	stats->st_blksize = superblock->block_size;
 	stats->st_blocks = superblock->block_count;
-	/*
 	stats->st_atime = directory.access_time;
 	stats->st_mtime = directory.modify_time;
 	stats->st_ctime = directory.modify_time;
@@ -109,13 +108,12 @@ static int ffs_getattr(const char *path, struct stat *stats)
 	if(directory.flags == FFS_DIR_DIRECTORY) {
 		stats->st_mode |= S_IFDIR;
 		stats->st_mode = S_IFDIR | 0777;
-		stats->st_nlink = 1;//2 + directory.length / sizeof(struct ffs_directory);
+		stats->st_nlink = 2 + directory.length / sizeof(struct ffs_directory);
 	} else if(directory.flags == FFS_DIR_FILE) {
 		stats->st_mode |= S_IFREG;
 		stats->st_nlink = 1;
 		stats->st_size = directory.length;
 	}
-	*/
 
 	return 0;
 }

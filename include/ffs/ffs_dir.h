@@ -15,7 +15,7 @@ typedef struct {
 extern const ffs_address FFS_DIR_ADDRESS_INVALID;
 
 // A FAT filesystem directory or file information
-struct ffs_directory {
+struct __attribute__((__packed__)) ffs_directory {
     char name[24];
     uint64_t create_time;
     uint64_t modify_time;

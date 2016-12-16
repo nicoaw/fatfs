@@ -173,7 +173,10 @@ ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *p
 	strcpy(mutable_path, path);
 
 	const char *name = strtok(mutable_path, "/");
-	return ffs_dir_path_impl(disk, start_address, name);
+	ffs_address result = ffs_dir_path_impl(disk, start_address, name);
+
+	free(mutable_path);
+	return result;
 }
 
 static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
@@ -243,6 +246,25 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 
 	*directory = *(directory_buffer + address.directory_index);
 
+	FFS_LOG("read directory:\n"
+			"\tname=%s\n"
+			"\tcreate_time=%lld\n"
+			"\tmodify_time=%lld\n"
+			"\taccess_time=%lld\n"
+			"\tlength=%d\n"
+			"\tstart_block=%d\n"
+			"\tflags=%d\n"
+			"\tunused=%d\n",
+			directory->name,
+			directory->create_time,
+			directory->modify_time,
+			directory->access_time,
+			directory->length,
+			directory->start_block,
+			directory->flags,
+			directory->unused
+		   );
+
 	free(directory_buffer);
 	return 0;
 }
@@ -285,6 +307,26 @@ int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory
 	}
 
 	*(directory_buffer + address.directory_index) = *directory;
+
+	FFS_LOG("write directory:\n"
+			"\tname=%s\n"
+			"\tcreate_time=%lld\n"
+			"\tmodify_time=%lld\n"
+			"\taccess_time=%lld\n"
+			"\tlength=%d\n"
+			"\tstart_block=%d\n"
+			"\tflags=%d\n"
+			"\tunused=%d\n",
+			directory->name,
+			directory->create_time,
+			directory->modify_time,
+			directory->access_time,
+			directory->length,
+			directory->start_block,
+			directory->flags,
+			directory->unused
+		   );
+
 
 	// Write updated block
 	if(ffs_block_write(disk, address.block, directory_buffer) != 0) {

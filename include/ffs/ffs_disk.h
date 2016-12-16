@@ -11,7 +11,7 @@
 typedef struct ffs_disk_info *ffs_disk;
 
 // FAT filesystem superblock information
-struct ffs_superblock {
+struct __attribute__((__packed__)) ffs_superblock {
     uint32_t magic;
     uint32_t block_count;
     uint32_t fat_block_count;
