@@ -4,7 +4,7 @@
 
 int main(int argc, char **argv)
 {
-	ffs_disk disk = ffs_disk_open(argv[1], FFS_DISK_OPEN_RDWR);
+	ffs_disk disk = ffs_disk_open(argv[1]);
 	if(disk == NULL) {
 		fprintf(stderr, "%s: %s: disk open failure\n", argv[0], argv[1]);
 		return -1;

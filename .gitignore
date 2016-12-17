@@ -5,9 +5,9 @@ Makefile
 cmake_install.cmake
 install_manifest.txt
 CTestTestfile.cmake
-*.vim
 bin
 lib
+*.vim
 *.swp
-testdisk
-testmount
+test.ffs
+test.mnt

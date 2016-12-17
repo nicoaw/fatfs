@@ -64,7 +64,7 @@ int main(int argc, char** argv)
 		.read = ffs_read,
 	};
 
-	ffs_disk disk = ffs_disk_open(argv[argc - 1], FFS_DISK_OPEN_RDWR);
+	ffs_disk disk = ffs_disk_open(argv[argc - 1]);
 	int result = fuse_main(argc - 1, argv, &operations, disk);
 
 	free(disk);

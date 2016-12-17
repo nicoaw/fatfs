@@ -4,9 +4,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FFS_DISK_OPEN_RDONLY	1
-#define FFS_DISK_OPEN_RDWR		2
-
 // A FAT filesystem disk
 typedef struct ffs_disk_info *ffs_disk;
 
@@ -27,9 +24,9 @@ int ffs_disk_close(ffs_disk disk);
 // Returns zero on success; otherwise, returns non-zero
 int ffs_disk_init(ffs_disk disk, size_t block_count);
 
-// Open a FAT filesystem disk with name pointed to by path with specified mode
+// Open a FAT filesystem disk with name pointed to by path
 // Returns disk on success; otherwise, returns NULL
-ffs_disk ffs_disk_open(const char *path, int mode);
+ffs_disk ffs_disk_open(const char *path);
 
 // Get FAT filesystem superblock for specified disk
 // Returns superblock on success; otherwise, returns NULL

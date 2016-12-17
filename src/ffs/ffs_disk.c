@@ -196,9 +196,9 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 	return 0;
 }
 
-ffs_disk ffs_disk_open(const char *path, int mode)
+ffs_disk ffs_disk_open(const char *path)
 {
-	FFS_LOG("path=%s mode=%d", path, mode);
+	FFS_LOG("path=%s", path);
 
     ffs_disk disk = malloc(sizeof(struct ffs_disk_info));
     if(!disk) {
@@ -206,18 +206,10 @@ ffs_disk ffs_disk_open(const char *path, int mode)
         return NULL;
     }
 
-	// Open disk file with correct mode
-	switch(mode) {
-		case FFS_DISK_OPEN_RDONLY:
-			disk->file = fopen(path, "r+");
-			break;
-		case FFS_DISK_OPEN_RDWR:
-			disk->file = fopen(path, "a+");
-			break;
-		default:
-			free(disk);
-			FFS_ERR("specified mode is invalid");
-			return NULL;
+	// Open existing or non-existing disk file
+	disk->file = fopen(path, "r+");
+	if(!disk->file) {
+		disk->file = fopen(path, "w+");
 	}
 
     // Disk file could not be opened
