@@ -13,7 +13,7 @@ struct __attribute__((__packed__)) ffs_superblock {
     uint32_t block_count;
     uint32_t fat_block_count;
     uint32_t block_size;
-    int32_t root_block;
+    uint32_t root_block;
 };
 
 // Close a FAT filesystem disk
@@ -22,7 +22,7 @@ int ffs_disk_close(ffs_disk disk);
 
 // Initialize a FAT filesystem on specifed disk
 // Returns zero on success; otherwise, returns non-zero
-int ffs_disk_init(ffs_disk disk, size_t block_count);
+int ffs_disk_init(ffs_disk disk, uint32_t block_count);
 
 // Open a FAT filesystem disk with name pointed to by path
 // Returns disk on success; otherwise, returns NULL

@@ -8,8 +8,8 @@
 
 // An pointer to a FAT filesystem directory
 typedef struct {
-	int block;
-	int directory_index;
+	uint32_t block;
+	uint32_t directory_index;
 } ffs_address;
 
 extern const ffs_address FFS_DIR_ADDRESS_INVALID;
@@ -21,9 +21,9 @@ struct __attribute__((__packed__)) ffs_directory {
     uint64_t modify_time;
     uint64_t access_time;
     uint32_t length;
-    int32_t start_block;
-    int32_t flags;
-    int32_t unused;
+    uint32_t start_block;
+    uint32_t flags;
+    uint32_t unused;
 };
 
 // Check if address is valid

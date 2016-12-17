@@ -20,7 +20,7 @@ int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 		return -1;
 	}
 
-	const size_t block_directory_count = superblock->block_size / sizeof(struct ffs_directory);
+	const uint32_t block_directory_count = superblock->block_size / sizeof(struct ffs_directory);
 
 	return address.block == FFS_BLOCK_LAST || address.block == FFS_BLOCK_INVALID || address.directory_index >= 0 || address.directory_index < block_directory_count ? 0 : -1;
 }
@@ -47,7 +47,7 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 	}
 
 	ffs_address address = {parent_directory.start_block, 0};
-	for(size_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
+	for(uint32_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
 		ffs_address next_address = ffs_dir_next(disk, address);
 
 		// Need to allocate another block since next block is last
@@ -91,11 +91,11 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 	}
 
 	// Find last address and check if specified address is in directory
-	const size_t scan_length = parent_directory.length - sizeof(struct ffs_directory);
+	const uint32_t scan_length = parent_directory.length - sizeof(struct ffs_directory);
 	int found_address = 0;
-	int last_block_parent = FFS_BLOCK_INVALID;
+	uint32_t last_block_parent = FFS_BLOCK_INVALID;
 	ffs_address last_address = {parent_directory.start_block, 0};
-	for(size_t length_scanned = 0; length_scanned < scan_length; length_scanned += sizeof(struct ffs_directory)) {
+	for(uint32_t length_scanned = 0; length_scanned < scan_length; length_scanned += sizeof(struct ffs_directory)) {
 		if(last_address.block == address.block && last_address.directory_index == address.directory_index) {
 			found_address = 1;
 		}
@@ -201,7 +201,7 @@ static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, 
 	}
 
 	ffs_address address = {parent_directory.start_block, 0};
-	for(size_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
+	for(uint32_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
 		struct ffs_directory directory;
 		if(ffs_dir_read(disk, address, &directory) != 0) {
 			FFS_ERR("directory read failed");

@@ -15,7 +15,7 @@ struct ffs_disk_info {
 };
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_read(ffs_disk disk, int block, void *buffer)
+int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer)
 {
 	FFS_LOG("disk=%p block=%d buffer=%p", disk, block, buffer);
 
@@ -46,7 +46,7 @@ int ffs_block_read(ffs_disk disk, int block, void *buffer)
 }
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_write(ffs_disk disk, int block, const void *buffer)
+int ffs_block_write(ffs_disk disk, uint32_t block, const void *buffer)
 {
 	FFS_LOG("disk=%p block=%d buffer=%p", disk, block, buffer);
 
@@ -98,11 +98,11 @@ int ffs_disk_close(ffs_disk disk)
     return 0;
 }
 
-int ffs_disk_init(ffs_disk disk, size_t block_count)
+int ffs_disk_init(ffs_disk disk, uint32_t block_count)
 {
 	FFS_LOG("disk=%p block_count=%zd", disk, block_count);
 
-    const size_t fat_size = block_count * sizeof(int32_t);
+    const uint32_t fat_size = block_count * sizeof(uint32_t);
 
     // Setup disk superblock
     disk->superblock.magic = 0x2345beef;
@@ -112,11 +112,11 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 	disk->superblock.root_block = 1 + disk->superblock.fat_block_count;
 
 	char *buffer = malloc(disk->superblock.block_size);
-	for(size_t i = 0; i < disk->superblock.block_size; ++i) {
+	for(uint32_t i = 0; i < disk->superblock.block_size; ++i) {
 		buffer[i] = 0;
 	}
 
-	for(size_t i = 0; i < disk->superblock.block_count; ++i) {
+	for(uint32_t i = 0; i < disk->superblock.block_count; ++i) {
 		ffs_block_write(disk, i, buffer);
 	}
 	free(buffer);
@@ -139,22 +139,9 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
 
     free(superblock_buffer);
 
-	FFS_LOG("superblock:\n"
-			"\tmagic=%d\n"
-			"\tblock_count=%d\n"
-			"\tfat_block_count=%d\n"
-			"\tblock_size=%d\n"
-			"\troot_block=%d\n",
-			disk->superblock.magic,
-			disk->superblock.block_count,
-			disk->superblock.fat_block_count,
-			disk->superblock.block_size,
-			disk->superblock.root_block
-		   );
+    const uint32_t invalid_block_count = 1 + disk->superblock.fat_block_count;
 
-    const size_t invalid_block_count = 1 + disk->superblock.fat_block_count;
-
-    int32_t *fat = calloc(disk->superblock.block_count, sizeof(int32_t));
+    uint32_t *fat = calloc(disk->superblock.block_count, sizeof(uint32_t));
     if(!fat) {
 		FFS_ERR("FAT buffer allocation failed");
         return -1;
@@ -165,7 +152,7 @@ int ffs_disk_init(ffs_disk disk, size_t block_count)
     memset(fat + invalid_block_count, FFS_BLOCK_FREE, disk->superblock.block_count - invalid_block_count);
 
     // Write FAT block by block
-    for(size_t i = 0; i < disk->superblock.fat_block_count; ++i) {
+    for(uint32_t i = 0; i < disk->superblock.fat_block_count; ++i) {
         if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((char *) fat) + i * disk->superblock.block_size) != 0) {
 			free(fat);
 			FFS_ERR("FAT block write failed");
@@ -236,19 +223,6 @@ ffs_disk ffs_disk_open(const char *path)
 
     free(superblock_buffer);
     disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
-
-	FFS_LOG("superblock:\n"
-			"\tmagic=%d\n"
-			"\tblock_count=%d\n"
-			"\tfat_block_count=%d\n"
-			"\tblock_size=%d\n"
-			"\troot_block=%d\n",
-			disk->superblock.magic,
-			disk->superblock.block_count,
-			disk->superblock.fat_block_count,
-			disk->superblock.block_size,
-			disk->superblock.root_block
-		   );
 
     return disk;
 }
