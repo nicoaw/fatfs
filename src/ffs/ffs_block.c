@@ -6,7 +6,7 @@
 #define FFS_BLOCK_FAT_BLOCK(block_size, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
 #define FFS_BLOCK_FAT_ENTRY(block_size, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
 
-int ffs_block_alloc(ffs_disk disk, uint32_t parent_block)
+uint32_t ffs_block_alloc(ffs_disk disk, uint32_t parent_block)
 {
 	FFS_LOG("disk=%p parent_block=%d", disk, parent_block);
 
@@ -148,7 +148,7 @@ int ffs_block_free(ffs_disk disk, uint32_t parent_block, uint32_t block)
 	return -1;
 }
 
-int ffs_block_next(ffs_disk disk, uint32_t block)
+uint32_t ffs_block_next(ffs_disk disk, uint32_t block)
 {
 	FFS_LOG("disk=%p block=%d", disk, block);
 
