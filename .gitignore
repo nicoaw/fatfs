@@ -11,3 +11,4 @@ lib
 *.swp
 test.ffs
 test.mnt
+*.sh

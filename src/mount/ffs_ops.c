@@ -27,6 +27,8 @@ int get_block_range(uint32_t start_block, size_t size, off_t offset, uint32_t *f
 // Returns zero on success
 int get_path_info(const char *path, struct path_info *path_info);
 
+int make_directory(const char *path, uint32_t flags);
+
 // Split path into base path and directory name
 // Path will be updated to base path
 // Returns directory name offset in original path
@@ -94,6 +96,17 @@ int get_path_info(const char *path, struct path_info *path_info)
 	return 0;
 }
 
+int ffs_create(const char *path, mode_t mode, struct fuse_file_info *file_info)
+{
+	FFS_LOG(2, "path=%s, mode=%d, file_info=%p", path, mode, file_info);
+
+	if(make_directory(path, FFS_DIR_FILE) != 0) {
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
 int ffs_getattr(const char *path, struct stat *stats)
 {
 	FFS_LOG(2, "path=%s, stats=%p", path, stats);
@@ -119,11 +132,10 @@ int ffs_getattr(const char *path, struct stat *stats)
 	stats->st_ctime = pi.directory.modify_time;
 
 	if(pi.directory.flags == FFS_DIR_DIRECTORY) {
-		stats->st_mode |= S_IFDIR;
 		stats->st_mode = S_IFDIR | 0777;
 		stats->st_nlink = 2 + pi.directory.length / sizeof(struct ffs_directory);
 	} else if(pi.directory.flags == FFS_DIR_FILE) {
-		stats->st_mode |= S_IFREG;
+		stats->st_mode = S_IFREG | 0777;
 		stats->st_nlink = 1;
 		stats->st_size = pi.directory.length;
 	}
@@ -150,54 +162,7 @@ int ffs_mkdir(const char *path, mode_t mode)
 {
 	FFS_LOG(2, "path=%s, mode=%d", path, mode);
 
-	// Need a mutable path to split it
-	char *base_path = malloc(strlen(path));
-	strcpy(base_path, path);
-	const char *name = split_path(base_path);
-
-	// Name too long
-	if(strlen(name) > FFS_DIR_NAME_LENGTH) {
-		FFS_ERR(2, "name too long");
-		free(base_path);
-		return -ENOENT;
-	}
-
-	struct path_info pi;
-	if(get_path_info(base_path, &pi) != 0) {
-		FFS_ERR(2, "path info retrieval failure");
-		free(base_path);
-		return -ENOENT;
-	}
-
-	// Setup directory
-	time_t current_time = time(NULL);
-    struct ffs_directory directory = {
-		.create_time = current_time,
-		.modify_time = current_time,
-		.access_time = current_time,
-		.length = 0,
-		.start_block = FFS_BLOCK_LAST,
-		.unused = 0
-    };
-	strcpy(directory.name, name);
-
-	free(base_path);
-
-	ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address);
-	if(ffs_dir_address_valid(MOUNT_DISK, address) != 0) {
-		FFS_ERR(2, "allocated address is invalid");
-		return -ENOENT;
-	}
-
-	ffs_dir_read(MOUNT_DISK, pi.address, &pi.directory);
-
-	if(ffs_dir_write(MOUNT_DISK, address, &directory) != 0) {
-		FFS_ERR(2, "directory write failure");
-		return -ENOENT;
-	}
-
-	if(ffs_dir_read(MOUNT_DISK, address, &directory) != 0) {
-		FFS_ERR(2, "directory read failure");
+	if(make_directory(path, FFS_DIR_DIRECTORY) != 0) {
 		return -ENOENT;
 	}
 
@@ -324,6 +289,74 @@ int ffs_unlink(const char *path)
 	if(ffs_dir_free(MOUNT_DISK, pi.address, address) != 0) {
 		printf("ffs_dir_free failed\n");
 		return -ENOENT;
+	}
+
+	return 0;
+}
+
+int ffs_utimens(const char *path, const struct timespec tv[2])
+{
+	struct path_info pi;
+	if(get_path_info(path, &pi) != 0) {
+		FFS_ERR(2, "path info retrieval failure");
+		return -1;
+	}
+
+	// Update access time
+	pi.directory.access_time = time(NULL);
+
+	if(ffs_dir_write(MOUNT_DISK, pi.address, &pi.directory) != 0) {
+		return -ENOENT;
+	}
+
+	return 0;
+}
+
+int make_directory(const char *path, uint32_t flags)
+{
+	// Need a mutable path to split it
+	char *base_path = malloc(strlen(path));
+	strcpy(base_path, path);
+	const char *name = split_path(base_path);
+
+	// Name too long
+	if(strlen(name) > FFS_DIR_NAME_LENGTH) {
+		FFS_ERR(2, "name too long");
+		free(base_path);
+		return -1;
+	}
+
+	struct path_info pi;
+	if(get_path_info(base_path, &pi) != 0) {
+		FFS_ERR(2, "path info retrieval failure");
+		free(base_path);
+		return -1;
+	}
+
+	// Setup directory
+	time_t current_time = time(NULL);
+    struct ffs_directory directory = {
+		.create_time = current_time,
+		.modify_time = current_time,
+		.access_time = current_time,
+		.length = 0,
+		.start_block = FFS_BLOCK_LAST,
+		.flags = flags,
+		.unused = 0
+    };
+	strcpy(directory.name, name);
+
+	free(base_path);
+
+	ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address);
+	if(ffs_dir_address_valid(MOUNT_DISK, address) != 0) {
+		FFS_ERR(2, "allocated address is invalid");
+		return -1;
+	}
+
+	if(ffs_dir_write(MOUNT_DISK, address, &directory) != 0) {
+		FFS_ERR(2, "directory write failure");
+		return -1;
 	}
 
 	return 0;

@@ -6,6 +6,7 @@
 int main(int argc, char** argv)
 {
 	struct fuse_operations operations = {
+		.create = ffs_create,
 		.getattr = ffs_getattr,
 		.open = ffs_open,
 		.mkdir = ffs_mkdir,
@@ -13,6 +14,7 @@ int main(int argc, char** argv)
 		.readdir = ffs_readdir,
 		.rmdir = ffs_unlink,
 		.unlink = ffs_unlink,
+		.utimens = ffs_utimens,
 	};
 
 	ffs_disk disk = ffs_disk_open(argv[argc - 1]);

@@ -176,6 +176,7 @@ int ffs_disk_init(ffs_disk disk, uint32_t block_count)
 		.access_time = current_time,
 		.length = 0,
 		.start_block = FFS_BLOCK_LAST,
+		.flags = FFS_DIR_DIRECTORY,
 		.unused = 0
     };
 
