@@ -15,6 +15,7 @@ int main(int argc, char** argv)
 		.rmdir = ffs_unlink,
 		.unlink = ffs_unlink,
 		.utimens = ffs_utimens,
+		.write = ffs_write,
 	};
 
 	ffs_disk disk = ffs_disk_open(argv[argc - 1]);

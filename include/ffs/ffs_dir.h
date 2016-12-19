@@ -5,8 +5,8 @@
 
 #define FFS_DIR_NAME_LENGTH		 23
 
-#define FFS_DIR_DIRECTORY		 0
-#define FFS_DIR_FILE			 1
+#define FFS_DIR_DIRECTORY		 1
+#define FFS_DIR_FILE			 2
 
 // An pointer to a FAT filesystem directory
 typedef struct {

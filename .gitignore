@@ -9,6 +9,7 @@ bin
 lib
 *.vim
 *.swp
+*.swo
 test.ffs
 test.mnt
 *.sh
