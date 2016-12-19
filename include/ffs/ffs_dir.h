@@ -3,6 +3,8 @@
 
 #include "ffs_disk.h"
 
+#define FFS_DIR_NAME_LENGTH		 23
+
 #define FFS_DIR_DIRECTORY		 0
 #define FFS_DIR_FILE			 1
 
@@ -16,7 +18,7 @@ extern const ffs_address FFS_DIR_ADDRESS_INVALID;
 
 // A FAT filesystem directory or file information
 struct __attribute__((__packed__)) ffs_directory {
-    char name[24];
+    char name[FFS_DIR_NAME_LENGTH + 1];
     uint64_t create_time;
     uint64_t modify_time;
     uint64_t access_time;

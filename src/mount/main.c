@@ -8,8 +8,11 @@ int main(int argc, char** argv)
 	struct fuse_operations operations = {
 		.getattr = ffs_getattr,
 		.open = ffs_open,
+		.mkdir = ffs_mkdir,
 		.read = ffs_read,
 		.readdir = ffs_readdir,
+		.rmdir = ffs_unlink,
+		.unlink = ffs_unlink,
 	};
 
 	ffs_disk disk = ffs_disk_open(argv[argc - 1]);
