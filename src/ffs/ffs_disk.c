@@ -1,5 +1,5 @@
+#include <ffs/ffs_aux.h>
 #include <ffs/ffs_block.h>
-#include <ffs/ffs_debug.h>
 #include <ffs/ffs_dir.h>
 #include <ffs/ffs_disk.h>
 #include <time.h>

@@ -1,5 +1,5 @@
-#ifndef FFS_DEBUG_H
-#define FFS_DEBUG_H
+#ifndef FFS_AUX_H
+#define FFS_AUX_H
 
 #define FFS_ERR_LEVEL 1
 #define FFS_LOG_LEVEL 2
@@ -27,5 +27,11 @@
 #define FFS_LOG(level, msg, ...)
 
 #endif
+
+// Get largest of a and b
+uint32_t max_ui32(uint32_t a, uint32_t b);
+
+// Get smallest of a and b
+uint32_t min_ui32(uint32_t a, uint32_t b);
 
 #endif

@@ -1,5 +1,5 @@
+#include <ffs/ffs_aux.h>
 #include <ffs/ffs_block.h>
-#include <ffs/ffs_debug.h>
 #include <stdlib.h>
 
 #define FFS_BLOCK_FAT_ENTRY_COUNT(block_size)	(block_size / sizeof(uint32_t))

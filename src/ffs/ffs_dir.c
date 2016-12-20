@@ -1,5 +1,5 @@
+#include <ffs/ffs_aux.h>
 #include <ffs/ffs_block.h>
-#include <ffs/ffs_debug.h>
 #include <ffs/ffs_dir.h>
 #include <stdlib.h>
 #include <string.h>
@@ -220,7 +220,7 @@ static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, 
 	}
 
 	ffs_address address = {parent_directory.start_block, 0};
-	for(uint32_t length_scanned = 0; length_scanned < parent_directory.length; length_scanned += sizeof(struct ffs_directory)) {
+	for(uint32_t length_read = 0; length_read < parent_directory.length; length_read += sizeof(struct ffs_directory)) {
 		struct ffs_directory directory;
 		if(ffs_dir_read(disk, address, &directory, sizeof(struct ffs_directory)) != 0) {
 			FFS_ERR(1, "directory read failed");
@@ -253,25 +253,45 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, void *data, uint32_t size)
 		return -1;
 	}
 
+	// Optimization for reading zero bytes
+	if(size == 0) {
+		return 0;
+	}
+
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
 		FFS_ERR(1, "superblock retrieval failed");
 		return -1;
 	}
 
+	uint32_t length_read = 0;
+	void *buffer = malloc(superblock->block_size);
 
+	// Read data chunk by chunk
+	while(length_read < size) {
+		const uint32_t chunk_length = min_ui32(superblock->block_size - address.offset, size - length_read);
 
-	// Read block directory is in
-	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
-	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
-		free(directory_buffer);
-		FFS_ERR(1, "block read failed");
-		return -1;
+		// Read block
+		if(ffs_block_read(disk, address.block, buffer) != 0) {
+			free(buffer);
+			FFS_ERR(1, "block read failed");
+			return -1;
+		}
+
+		// Copy appropriate data
+		memcpy((char *) data + length_read, (char *) buffer + address.offset, chunk_length);
+		length_read += chunk_length;
+
+		// Seek next address to read from
+		address = ffs_dir_seek(disk, address, chunk_length);
+		if(!FFS_DIR_ADDRESS_VALID(address)) {
+			free(buffer);
+			FFS_ERR(1, "failed to seek to next chunk");
+			return -1;
+		}
 	}
 
-	*directory = *(directory_buffer + address.offset);
-
-	free(directory_buffer);
+	free(buffer);
 	return 0;
 }
 
@@ -289,13 +309,18 @@ ffs_address ffs_dir_root(ffs_disk disk)
 	return address;
 }
 
-int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory)
+int ffs_dir_write(ffs_disk disk, ffs_address address, const void *data, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p address={block=%u offset=%u} directory=%p", disk, address.block, address.offset, directory);
+	FFS_LOG(1, "disk=%p address={block=%u offset=%u} data=%p size=%u", disk, address.block, address.offset, data, size);
 
-	if(ffs_dir_address_valid(disk, address) != 0) {
+	if(!FFS_DIR_ADDRESS_VALID(address)) {
 		FFS_ERR(1, "specified address invalid");
 		return -1;
+	}
+
+	// Optimization for writing zero bytes
+	if(size == 0) {
+		return 0;
 	}
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
@@ -304,43 +329,43 @@ int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory
 		return -1;
 	}
 
-	// Read block directory is in
-	struct ffs_directory *directory_buffer = malloc(superblock->block_size);
-	if(ffs_block_read(disk, address.block, directory_buffer) != 0) {
-		free(directory_buffer);
-		FFS_ERR(1, "block read failed");
-		return -1;
+	uint32_t length_written = 0;
+	void *buffer = malloc(superblock->block_size);
+
+	// Write data chunk by chunk
+	while(length_written < size) {
+		const uint32_t chunk_length = min_ui32(superblock->block_size - address.offset, size - length_written);
+
+		// Read block to copy existing data
+		// Optimization: Don't need to do this if we are reading the entire block
+		if(chunk_length < superblock->block_size) {
+			if(ffs_block_read(disk, address.block, buffer) != 0) {
+				free(buffer);
+				FFS_ERR(1, "block read failed");
+				return -1;
+			}
+		}
+
+		// Copy appropriate data
+		memcpy((char *) buffer + address.offset, (char *) data + length_written, chunk_length);
+		length_written += chunk_length;
+
+		// Write block
+		if(ffs_block_write(disk, address.block, buffer) != 0) {
+			free(buffer);
+			FFS_ERR(1, "block write failed");
+			return -1;
+		}
+
+		// Seek next address to write from
+		address = ffs_dir_seek(disk, address, chunk_length);
+		if(!FFS_DIR_ADDRESS_VALID(address)) {
+			free(buffer);
+			FFS_ERR(1, "failed to seek to next chunk");
+			return -1;
+		}
 	}
 
-	*(directory_buffer + address.offset) = *directory;
-
-	FFS_LOG(1, "write directory:\n"
-			"\tname=%s\n"
-			"\tcreate_time=%llu\n"
-			"\tmodify_time=%llu\n"
-			"\taccess_time=%llu\n"
-			"\tlength=%u\n"
-			"\tstart_block=%u\n"
-			"\tflags=%u\n"
-			"\tunused=%u\n",
-			directory->name,
-			directory->create_time,
-			directory->modify_time,
-			directory->access_time,
-			directory->length,
-			directory->start_block,
-			directory->flags,
-			directory->unused
-		   );
-
-
-	// Write updated block
-	if(ffs_block_write(disk, address.block, directory_buffer) != 0) {
-		free(directory_buffer);
-		FFS_ERR(1, "block write failed");
-		return -1;
-	}
-
-	free(directory_buffer);
+	free(buffer);
 	return 0;
 }

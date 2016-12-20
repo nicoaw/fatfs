@@ -48,7 +48,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_a
 ffs_address ffs_dir_path(ffs_disk disk, ffs_address root_address, const char *path);
 
 // Read size bytes of data from specified address
-// The space to be read must already be allocated
+// The blocks to be read must already be allocated
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_read(ffs_disk disk, ffs_address address, void *data, uint32_t size);
 
@@ -68,7 +68,7 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start_address, uint32_t offs
 uint32_t ffs_dir_tell(ffs_disk disk, ffs_address start_address, ffs_address offset_address);
 
 // Write size bytes of data to specified address
-// The space to be written must already be allocated
+// The blocks to be written to must already be allocated
 // Returns zero on success; otherwise, returns non-zero
 int ffs_dir_write(ffs_disk disk, ffs_address address, const void *data, uint32_t size);
 
