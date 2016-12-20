@@ -17,7 +17,7 @@ struct ffs_disk_info {
 // Must be defined here because ffs_disk is defined here
 int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer)
 {
-	FFS_LOG(0, "disk=%p block=%d buffer=%p", disk, block, buffer);
+	FFS_LOG(0, "disk=%p block=%u buffer=%p", disk, block, buffer);
 
 	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
 		FFS_ERR(0, "specified block invalid");
@@ -48,7 +48,7 @@ int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer)
 // Must be defined here because ffs_disk is defined here
 int ffs_block_write(ffs_disk disk, uint32_t block, const void *buffer)
 {
-	FFS_LOG(0, "disk=%p block=%d buffer=%p", disk, block, buffer);
+	FFS_LOG(0, "disk=%p block=%u buffer=%p", disk, block, buffer);
 
 	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
 		FFS_ERR(0, "specified block invalid");

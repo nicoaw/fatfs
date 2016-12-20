@@ -1,5 +1,4 @@
 #include "ffs_ops.h"
-
 #include <errno.h>
 #include <ffs/ffs_block.h>
 #include <ffs/ffs_debug.h>
@@ -110,7 +109,7 @@ int get_path_info(const char *path, struct path_info *path_info)
 
 int ffs_create(const char *path, mode_t mode, struct fuse_file_info *file_info)
 {
-	FFS_LOG(2, "path=%s, mode=%d, file_info=%p", path, mode, file_info);
+	FFS_LOG(2, "path=%s, mode=%u, file_info=%p", path, mode, file_info);
 
 	if(make_directory(path, FFS_DIR_FILE) != 0) {
 		return -ENOENT;
@@ -172,7 +171,7 @@ int ffs_open(const char *path, struct fuse_file_info *file_info)
 
 int ffs_mkdir(const char *path, mode_t mode)
 {
-	FFS_LOG(2, "path=%s, mode=%d", path, mode);
+	FFS_LOG(2, "path=%s, mode=%u", path, mode);
 
 	if(make_directory(path, FFS_DIR_DIRECTORY) != 0) {
 		return -ENOENT;
@@ -459,7 +458,7 @@ int resize_directory(struct path_info *path_info, uint32_t length)
 		// Need to allocate more blocks
 		uint8_t *zeros = calloc(superblock->block_size, 1);
 		while(length > 0) {
-			FFS_LOG(2, "allocating block length=%d", length);
+			FFS_LOG(2, "allocating block length=%u", length);
 			last_block = ffs_block_alloc(MOUNT_DISK, last_block);
 			if(last_block == FFS_BLOCK_INVALID) {
 				free(zeros);

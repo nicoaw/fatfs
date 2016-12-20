@@ -12,7 +12,7 @@ static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, 
 
 int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 {
-	FFS_LOG(1, "disk=%p address={block=%d directory_index=%d}", disk, address.block, address.directory_index);
+	FFS_LOG(1, "disk=%p address={block=%u directory_index=%u}", disk, address.block, address.directory_index);
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
@@ -27,7 +27,7 @@ int ffs_dir_address_valid(ffs_disk disk, ffs_address address)
 
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%d directory_index=%d}", disk, parent_address.block, parent_address.directory_index);
+	FFS_LOG(1, "disk=%p parent_address={block=%u directory_index=%u}", disk, parent_address.block, parent_address.directory_index);
 
 	if(ffs_dir_address_valid(disk, parent_address) != 0) {
 		FFS_ERR(1, "parent address invalid");
@@ -76,7 +76,7 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address)
 
 int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%d directory_index=%d} address={block=%d directory_index=%d}", disk, parent_address.block, parent_address.directory_index, address.block, address.directory_index);
+	FFS_LOG(1, "disk=%p parent_address={block=%u directory_index=%u} address={block=%u directory_index=%u}", disk, parent_address.block, parent_address.directory_index, address.block, address.directory_index);
 
 	if(ffs_dir_address_valid(disk, parent_address) != 0 || ffs_dir_address_valid(disk, address) != 0) {
 		FFS_ERR(1, "specified addresses invalid");
@@ -146,7 +146,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address)
 
 ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
 {
-	FFS_LOG(1, "disk=%p sibling_address={block=%d directory_index=%d}", disk, sibling_address.block, sibling_address.directory_index);
+	FFS_LOG(1, "disk=%p sibling_address={block=%u directory_index=%u}", disk, sibling_address.block, sibling_address.directory_index);
 
 	if(ffs_dir_address_valid(disk, sibling_address) != 0) {
 		FFS_ERR(1, "specified sibling address invalid");
@@ -166,7 +166,7 @@ ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
 
 ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *path)
 {
-	FFS_LOG(1, "disk=%p start_address={block=%d directory_index=%d} path=%s", disk, start_address.block, start_address.directory_index, path);
+	FFS_LOG(1, "disk=%p start_address={block=%u directory_index=%u} path=%s", disk, start_address.block, start_address.directory_index, path);
 
 	// Need mutable path for strtok
 	char *mutable_path = calloc(strlen(path) + 1, sizeof(char));
@@ -181,7 +181,7 @@ ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *p
 
 static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%d directory_index=%d} name=%s", disk, parent_address.block, parent_address.directory_index, name);
+	FFS_LOG(1, "disk=%p parent_address={block=%u directory_index=%u} name=%s", disk, parent_address.block, parent_address.directory_index, name);
 
 	if(ffs_dir_address_valid(disk, parent_address) != 0) {
 		FFS_ERR(1, "parent address invalid");
@@ -223,7 +223,7 @@ static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, 
 
 int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory)
 {
-	FFS_LOG(1, "disk=%p address={block=%d directory_index=%d} directory=%p", disk, address.block, address.directory_index, directory);
+	FFS_LOG(1, "disk=%p address={block=%u directory_index=%u} directory=%p", disk, address.block, address.directory_index, directory);
 
 	if(ffs_dir_address_valid(disk, address) != 0) {
 		FFS_ERR(1, "specified address invalid");
@@ -248,13 +248,13 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *direc
 
 	FFS_LOG(1, "read directory:\n"
 			"\tname=%s\n"
-			"\tcreate_time=%lld\n"
-			"\tmodify_time=%lld\n"
-			"\taccess_time=%lld\n"
-			"\tlength=%d\n"
-			"\tstart_block=%d\n"
-			"\tflags=%d\n"
-			"\tunused=%d\n",
+			"\tcreate_time=%llu\n"
+			"\tmodify_time=%llu\n"
+			"\taccess_time=%llu\n"
+			"\tlength=%u\n"
+			"\tstart_block=%u\n"
+			"\tflags=%u\n"
+			"\tunused=%u\n",
 			directory->name,
 			directory->create_time,
 			directory->modify_time,
@@ -285,7 +285,7 @@ ffs_address ffs_dir_root(ffs_disk disk)
 
 int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory)
 {
-	FFS_LOG(1, "disk=%p address={block=%d directory_index=%d} directory=%p", disk, address.block, address.directory_index, directory);
+	FFS_LOG(1, "disk=%p address={block=%u directory_index=%u} directory=%p", disk, address.block, address.directory_index, directory);
 
 	if(ffs_dir_address_valid(disk, address) != 0) {
 		FFS_ERR(1, "specified address invalid");
@@ -310,13 +310,13 @@ int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory
 
 	FFS_LOG(1, "write directory:\n"
 			"\tname=%s\n"
-			"\tcreate_time=%lld\n"
-			"\tmodify_time=%lld\n"
-			"\taccess_time=%lld\n"
-			"\tlength=%d\n"
-			"\tstart_block=%d\n"
-			"\tflags=%d\n"
-			"\tunused=%d\n",
+			"\tcreate_time=%llu\n"
+			"\tmodify_time=%llu\n"
+			"\taccess_time=%llu\n"
+			"\tlength=%u\n"
+			"\tstart_block=%u\n"
+			"\tflags=%u\n"
+			"\tunused=%u\n",
 			directory->name,
 			directory->create_time,
 			directory->modify_time,

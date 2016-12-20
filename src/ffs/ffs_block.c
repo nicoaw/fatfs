@@ -8,7 +8,7 @@
 
 uint32_t ffs_block_alloc(ffs_disk disk, uint32_t parent_block)
 {
-	FFS_LOG(0, "disk=%p parent_block=%d", disk, parent_block);
+	FFS_LOG(0, "disk=%p parent_block=%u", disk, parent_block);
 
 	if(parent_block == FFS_BLOCK_INVALID || parent_block == FFS_BLOCK_FREE) {
 		FFS_ERR(0, "specified parent block invalid");
@@ -79,7 +79,7 @@ uint32_t ffs_block_alloc(ffs_disk disk, uint32_t parent_block)
 
 int ffs_block_free(ffs_disk disk, uint32_t parent_block, uint32_t block)
 {
-	FFS_LOG(0, "disk=%p parent_block=%d block=%d", disk, parent_block, block);
+	FFS_LOG(0, "disk=%p parent_block=%u block=%u", disk, parent_block, block);
 
 	if(parent_block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
 		FFS_ERR(0, "specified parent block or block invalid");
@@ -156,7 +156,7 @@ int ffs_block_free(ffs_disk disk, uint32_t parent_block, uint32_t block)
 
 uint32_t ffs_block_next(ffs_disk disk, uint32_t block)
 {
-	FFS_LOG(0, "disk=%p block=%d", disk, block);
+	FFS_LOG(0, "disk=%p block=%u", disk, block);
 
 	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
 		FFS_ERR(0, "specified block invalid");
