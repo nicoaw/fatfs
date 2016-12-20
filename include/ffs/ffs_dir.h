@@ -11,7 +11,7 @@
 
 #define FFS_DIR_OFFSET_INVALID	-1
 
-#define FFS_DIR_ADDRESS_VALID(address) (address.block != FFS_BLOCK_FREE && address.block != FFS_BLOCK_INVALID && address.offset != FFS_DIR_OFFSET_INVALID)
+#define FFS_DIR_ADDRESS_VALID(address, offset_end) (address.block != FFS_BLOCK_FREE && address.block != FFS_BLOCK_INVALID && address.offset < offset_end)
 
 // A FAT filesystem directory or file information
 struct __attribute__((__packed__)) ffs_directory {
