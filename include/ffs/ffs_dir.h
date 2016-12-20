@@ -56,17 +56,16 @@ int ffs_dir_read(ffs_disk disk, ffs_address address, void *data, uint32_t size);
 // Returns root address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_root(ffs_disk disk);
 
-// Get the offset address of a directory associated with parent address
-// The specified offset must be less than or equal to the directory length
+// Get sibling address offset from the start address
 // The address block is guaranteed to be allocated on success
 // The space in the block is not guaranteed to be allocated
-// Returns address at offset on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-ffs_address ffs_dir_seek(ffs_disk disk, ffs_address parent_address, uint32_t offset);
+// Returns offset address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start_address, uint32_t offset);
 
-// Get offset from offset address of a directory associated with parent address
-// Offset must be a child address of specified directory
+// Get difference between start address and offset address
+// Offset must be a sibling address of specified start address
 // Returns offset on success; otherwise FFS_DIR_OFFSET_INVALID
-uint32_t ffs_dir_seek(ffs_disk disk, ffs_address parent_address, ffs_address offset);
+uint32_t ffs_dir_tell(ffs_disk disk, ffs_address start_address, ffs_address offset_address);
 
 // Write size bytes of data to specified address
 // The space to be written must already be allocated
