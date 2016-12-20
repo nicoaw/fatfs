@@ -5,16 +5,13 @@
 
 #define FFS_DIR_NAME_LENGTH		 23
 
+// Directory flags
 #define FFS_DIR_DIRECTORY		 1
 #define FFS_DIR_FILE			 2
 
-// An pointer to a FAT filesystem directory
-typedef struct {
-	uint32_t block;
-	uint32_t directory_index;
-} ffs_address;
+#define FFS_DIR_OFFSET_INVALID	-1
 
-extern const ffs_address FFS_DIR_ADDRESS_INVALID;
+#define FFS_DIR_ADDRESS_VALID(address) (address.block != FFS_BLOCK_INVALID && address.offset != FFS_DIR_OFFSET_INVALID)
 
 // A FAT filesystem directory or file information
 struct __attribute__((__packed__)) ffs_directory {
@@ -28,39 +25,52 @@ struct __attribute__((__packed__)) ffs_directory {
     uint32_t unused;
 };
 
-// Check if address is valid
+// A pointer to data in a FAT filesystem directory
+typedef struct {
+	uint32_t block;
+	uint32_t offset;
+} ffs_address;
+
+extern const ffs_address FFS_DIR_ADDRESS_INVALID;
+
+// Allocate size bytes in the directory associated with parent address
+// Returns allocated address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t size);
+
+// Free size bytes at offset in the directory associated with parent address
+// Offset must be a child address of specified directory
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_address_valid(ffs_disk disk, ffs_address address);
+int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_address, uint32_t size);
 
-// Allocate space for a new child directory of specified parent address
+// Get address for the directory pointed to by path, starting at specified root directory
+// Path must be relative to specified root address
 // Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address);
+ffs_address ffs_dir_path(ffs_disk disk, ffs_address root_address, const char *path);
 
-// Free space in parent directory by removing specified directory address
-// Directory must be a child of parent directory
-// Directory data will not be freed, use ffs_block_free on its start block
+// Read size bytes of data from specified address
+// The space to be read must already be allocated
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address address);
-
-// Get next sibling address, not guaranteed to be allocated
-// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address);
-
-// Get address for directory pointed to by path, starting at specified start address
-// Path must be relative to specified start address
-// Returns address of allocated directory on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-ffs_address ffs_dir_path(ffs_disk disk, ffs_address start_address, const char *path);
-
-// Read directory information from specified address
-// Returns zero on success; otherwise, returns non-zero
-int ffs_dir_read(ffs_disk disk, ffs_address address, struct ffs_directory *directory);
+int ffs_dir_read(ffs_disk disk, ffs_address address, void *data, uint32_t size);
 
 // Get root address
 // Returns root address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_root(ffs_disk disk);
 
-// Write directory information to specified address
+// Get the offset address of a directory associated with parent address
+// The specified offset must be less than or equal to the directory length
+// The address block is guaranteed to be allocated on success
+// The space in the block is not guaranteed to be allocated
+// Returns address at offset on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+ffs_address ffs_dir_seek(ffs_disk disk, ffs_address parent_address, uint32_t offset);
+
+// Get offset from offset address of a directory associated with parent address
+// Offset must be a child address of specified directory
+// Returns offset on success; otherwise FFS_DIR_OFFSET_INVALID
+uint32_t ffs_dir_seek(ffs_disk disk, ffs_address parent_address, ffs_address offset);
+
+// Write size bytes of data to specified address
+// The space to be written must already be allocated
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_write(ffs_disk disk, ffs_address address, const struct ffs_directory *directory);
+int ffs_dir_write(ffs_disk disk, ffs_address address, const void *data, uint32_t size);
 
 #endif
