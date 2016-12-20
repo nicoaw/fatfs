@@ -309,6 +309,92 @@ ffs_address ffs_dir_root(ffs_disk disk)
 	return address;
 }
 
+ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start_address, uint32_t offset)
+{
+	FFS_LOG(1, "disk=%p start_address={block=%u offset=%u} offset=%u", disk, start_address.block, start_address.offset, size);
+
+	if(!FFS_DIR_ADDRESS_VALID(address)) {
+		FFS_ERR(1, "specified start address invalid");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	// Optimization for seeking offset zero
+	if(offset == 0) {
+		return start_address;
+	}
+
+	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+	if(!superblock) {
+		FFS_ERR(1, "superblock retrieval failed");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	// Seek chunk by chunk
+	uint32_t length_scanned = 0;
+	while(length_scanned < offset) {
+		const uint32_t remain_block = superblock->block_size - start_address.offset;
+		const uint32_t remain_offset = offset - length_scanned;
+
+		if(remain_block < remain_offset) {
+			// Seek to next block
+			start_address.offset = 0;
+			start_address.block = ffs_block_next(disk, start_address.block);
+			if(start_address.block == FFS_BLOCK_LAST) {
+				FFS_ERR(1, "failed to get next block");
+				return FFS_DIR_ADDRESS_VALID;
+			}
+
+			length_scanned += remain_block;
+		} else {
+			// Seek to offset
+			start_address.offset = remain_offset;
+			length_scanned += remain_offset;
+		}
+	}
+
+	if(length_scanned != offset) {
+		FFS_ERR(1, "failed to seek to correct offset");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
+	return start_address;
+}
+
+uint32_t ffs_dir_tell(ffs_disk disk, ffs_address start_address, ffs_address offset_address)
+{
+	FFS_LOG(1, "disk=%p start_address={block=%u offset=%u} offset_address={block=%u offset=%u}", disk, start_address.block, start_address.offset, offset_address.block, offset_address.offset);
+
+	if(!FFS_DIR_ADDRESS_VALID(start_address)) {
+		FFS_ERR(1, "specified start address invalid");
+		return FFS_DIR_OFFSET_INVALID;
+	}
+
+	if(!FFS_DIR_ADDRESS_VALID(offset_address)) {
+		FFS_ERR(1, "specified offset address invalid");
+		return FFS_DIR_OFFSET_INVALID;
+	}
+
+	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
+	if(!superblock) {
+		FFS_ERR(1, "superblock retrieval failed");
+		return -1;
+	}
+
+	uint32_t offset = 0;
+	while(start_address.block != offset_address.block) {
+		offset += superblock->block_size - start_address.offset;
+
+		start_address.block = ffs_block_next(disk, start_address.block);
+		start_address.offset = 0;
+		if(start_address.block == FFS_BLOCK_LAST) {
+			FFS_ERR(1, "failed to get next block");
+			return FFS_DIR_OFFSET_INVALID;
+		}
+	}
+
+	return offset + offset_address.offset;
+}
+
 int ffs_dir_write(ffs_disk disk, ffs_address address, const void *data, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p address={block=%u offset=%u} data=%p size=%u", disk, address.block, address.offset, data, size);
