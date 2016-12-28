@@ -27,15 +27,14 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t si
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
+	// Need to preallocate start block if directory is empty
+	if(directory.start_block == FFS_BLOCK_LAST) {
+		directory.start_block = ffs_block_alloc(disk, FFS_BLOCK_LAST);
+	}
+
 	// Get address after last allocated data
 	ffs_address address = {directory.start_block, 0};
 	address = ffs_dir_seek(disk, address, directory.length);
-	if(!FFS_DIR_ADDRESS_VALID(address, FFS_DIR_OFFSET_INVALID)) {
-		FFS_ERR(1, "failed to seek to last");
-		return -1;
-	}
-
-	address.offset %= superblock.block_size;
 
 	// Currently allocated space
 	uint32_t allocated = 0;
@@ -64,11 +63,6 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t si
 		}
 	}
 
-	// Update directory start block if it was empty before
-	if(directory.start_block == FFS_BLOCK_LAST) {
-		directory.start_block = address.block;
-	}
-
 	// Write updated directory information
 	directory.length += size;
 	if(ffs_dir_write(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
@@ -81,7 +75,7 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t si
 
 int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_address, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} offset={block=%u offset=%u} size=%u", disk, parent_address.block, parent_address.offset, offset.block, offset.offset, size);
+	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} offset={block=%u offset=%u} size=%u", disk, parent_address.block, parent_address.offset, offset_address.block, offset_address.offset, size);
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
@@ -156,31 +150,10 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_a
 	directory.length -= size;
 	if(ffs_dir_write(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory write failed");
-		return FFS_DIR_ADDRESS_INVALID;
+		return -1;
 	}
 
 	return 0;
-}
-
-
-ffs_address ffs_dir_next(ffs_disk disk, ffs_address sibling_address)
-{
-	FFS_LOG(1, "disk=%p sibling_address={block=%u offset=%u}", disk, sibling_address.block, sibling_address.offset);
-
-	if(ffs_dir_address_valid(disk, sibling_address) != 0) {
-		FFS_ERR(1, "specified sibling address invalid");
-		return FFS_DIR_ADDRESS_INVALID;
-	}
-
-	++sibling_address.offset;
-
-	// If new directory index is invalid then next directory is in the next block
-	if(ffs_dir_address_valid(disk, sibling_address) != 0) {
-		sibling_address.block = ffs_block_next(disk, sibling_address.block);
-		sibling_address.offset = 0;
-	}
-
-	return sibling_address;
 }
 
 ffs_address ffs_dir_path(ffs_disk disk, ffs_address root_address, const char *path)
@@ -192,20 +165,20 @@ ffs_address ffs_dir_path(ffs_disk disk, ffs_address root_address, const char *pa
 	strcpy(mutable_path, path);
 
 	const char *name = strtok(mutable_path, "/");
-	ffs_address result = ffs_dir_path_impl(disk, start_address, name);
+	ffs_address result = ffs_dir_path_impl(disk, root_address, name);
 
 	free(mutable_path);
 	return result;
 }
 
-static ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
+ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name)
 {
 	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} name=%s", disk, parent_address.block, parent_address.offset, name);
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
 		FFS_ERR(1, "superblock retrieval failed");
-		return -1;
+		return FFS_DIR_ADDRESS_INVALID;
 	}
 
 	if(!FFS_DIR_ADDRESS_VALID(parent_address, superblock->block_size)) {
@@ -317,7 +290,7 @@ ffs_address ffs_dir_root(ffs_disk disk)
 
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start_address, uint32_t offset)
 {
-	FFS_LOG(1, "disk=%p start_address={block=%u offset=%u} offset=%u", disk, start_address.block, start_address.offset, size);
+	FFS_LOG(1, "disk=%p start_address={block=%u offset=%u} offset=%u", disk, start_address.block, start_address.offset, offset);
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
 	if(!superblock) {
@@ -325,7 +298,7 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start_address, uint32_t offs
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
-	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
+	if(!FFS_DIR_ADDRESS_VALID(start_address, superblock->block_size)) {
 		FFS_ERR(1, "specified start address invalid");
 		return FFS_DIR_ADDRESS_INVALID;
 	}

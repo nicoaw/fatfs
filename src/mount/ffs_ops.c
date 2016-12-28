@@ -18,10 +18,6 @@ struct path_info
 	struct ffs_directory directory;
 };
 
-// Get first (inclusive) and last (exculsive) block from size and offset starting at start block
-// Returns zero on success
-int get_block_range(uint32_t start_block, size_t size, off_t offset, uint32_t *first_block, uint32_t *last_block);
-
 // Get path info given specified path
 // Returns zero on success
 int get_path_info(const char *path, struct path_info *path_info);
@@ -30,77 +26,31 @@ int get_path_info(const char *path, struct path_info *path_info);
 // Returns zero on success
 int make_directory(const char *path, uint32_t flags);
 
-// Resize an existing directory
-// If the directory previously was larger then length, the extra data is lost
-// If the directory previously was shorter, it is extended with zeros
-// Returns zero on success
-int resize_directory(struct path_info *path_info, uint32_t length);
-
-// Subtract a from b
-// If result is negative then it returns zero
-uint32_t safe_sub(uint32_t a, uint32_t b);
-
 // Split path into base path and directory name
 // Path will be updated to base path
 // Returns directory name offset in original path
 char *split_path(char *path);
 
-int get_block_range(uint32_t start_block, size_t size, off_t offset, uint32_t *first_block, uint32_t *last_block)
+int get_path_info(const char *path, struct path_info *path_info)
 {
 	const struct ffs_superblock *superblock = ffs_disk_superblock(MOUNT_DISK);
 	if(!superblock) {
-		return -1;
+		return -ENOENT;
 	}
 
-	// Find first block
-	while(1) {
-		if(start_block == FFS_BLOCK_INVALID || start_block == FFS_BLOCK_LAST) {
-			return -1;
-		}
-
-		if(offset < superblock->block_size) {
-			break;
-		}
-
-		start_block = ffs_block_next(MOUNT_DISK, start_block);
-		offset -= superblock->block_size;
-	}
-
-	*first_block = start_block;
-	offset += size; // New offset for last block
-
-	while(1) {
-		if(start_block == FFS_BLOCK_INVALID || start_block == FFS_BLOCK_LAST) {
-			return -1;
-		}
-
-		if(offset < superblock->block_size) {
-			break;
-		}
-
-		start_block = ffs_block_next(MOUNT_DISK, start_block);
-		offset -= superblock->block_size;
-	}
-
-	*last_block = ffs_block_next(MOUNT_DISK, start_block);
-	return 0;
-}
-
-int get_path_info(const char *path, struct path_info *path_info)
-{
 	// Get root address
 	path_info->root_address = ffs_dir_root(MOUNT_DISK);
-	if(ffs_dir_address_valid(MOUNT_DISK, path_info->root_address) != 0) {
+	if(!FFS_DIR_ADDRESS_VALID(path_info->root_address, superblock->block_size) != 0) {
 		return -1;
 	}
 
 	// Get directory at specified path
 	path_info->address = ffs_dir_path(MOUNT_DISK, path_info->root_address, path);
-	if(ffs_dir_address_valid(MOUNT_DISK, path_info->address) != 0) {
+	if(!FFS_DIR_ADDRESS_VALID(path_info->address, superblock->block_size) != 0) {
 		return -1;
 	}
 
-	if(ffs_dir_read(MOUNT_DISK, path_info->address, &path_info->directory) != 0) {
+	if(ffs_dir_read(MOUNT_DISK, path_info->address, &path_info->directory, sizeof(struct ffs_directory)) != 0) {
 		return -1;
 	}
 
@@ -194,20 +144,15 @@ int ffs_read(const char *path, char *buffer, size_t size, off_t offset, struct f
 		return -ENOENT;
 	}
 
-	uint32_t first_block;
-	uint32_t last_block;
-	if(get_block_range(pi.directory.start_block, size, offset, &first_block, &last_block) != 0) {
+	// Seek to read offset
+	ffs_address address = {pi.directory.start_block, 0};
+	address = ffs_dir_seek(MOUNT_DISK, address, offset);
+	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
 		return -ENOENT;
 	}
-
-	// Read block by block
-	while(first_block != last_block) {
-		if(ffs_block_read(MOUNT_DISK, first_block, buffer) != 0) {
-			return -ENOENT;
-		}
-
-		first_block = ffs_block_next(MOUNT_DISK, first_block);
-		buffer += superblock->block_size;
+	
+	if(ffs_dir_read(MOUNT_DISK, address, buffer, size) != 0) {
+		return -ENOENT;
 	}
 
 	return 0;
@@ -235,15 +180,53 @@ int ffs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t of
 	for(
 			uint32_t length_scanned = 0;
 			length_scanned < pi.directory.length;
-			length_scanned += sizeof(struct ffs_directory), address = ffs_dir_next(MOUNT_DISK, address)) {
+			length_scanned += sizeof(struct ffs_directory), address = ffs_dir_seek(MOUNT_DISK, address, sizeof(struct ffs_directory))) {
 		struct ffs_directory directory;
-		if(ffs_dir_read(MOUNT_DISK, address, &directory) != 0) {
+		if(ffs_dir_read(MOUNT_DISK, address, &directory, sizeof(struct ffs_directory)) != 0) {
 			return -ENOENT;
 		}
 
 		filler(buffer, directory.name, NULL, 0);
 	}
 
+	return 0;
+}
+
+int ffs_truncate(const char *path, off_t size)
+{
+	FFS_LOG(2, "path=%s size=%d", path, size);
+
+	const struct ffs_superblock *superblock = ffs_disk_superblock(MOUNT_DISK);
+	if(!superblock) {
+		FFS_ERR(2, "superblock retrieval failure");
+		return -ENOENT;
+	}
+
+	struct path_info pi;
+	if(get_path_info(path, &pi) != 0) {
+		return -ENOENT;
+	}
+
+	if(size < pi.directory.length) {
+		// Get offset address to free from
+		ffs_address offset_address = {pi.directory.start_block, 0};
+		offset_address = ffs_dir_seek(MOUNT_DISK, offset_address, pi.directory.length - size);
+		if(!FFS_DIR_ADDRESS_VALID(offset_address, superblock->block_size)) {
+			return -ENOENT;
+		}
+
+		// Free space at back of directory
+		if(ffs_dir_free(MOUNT_DISK, pi.address, offset_address, size) != 0) {
+			return -ENOENT;
+		}
+	} else {
+		// Allocate space at back of directory
+		ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address, size - pi.directory.length);
+		if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
+			return -ENOENT;
+		}
+	}
+	
 	return 0;
 }
 
@@ -270,8 +253,8 @@ int ffs_unlink(const char *path)
 	for(
 			uint32_t length_scanned = 0;
 			length_scanned < pi.directory.length;
-			length_scanned += sizeof(struct ffs_directory), address = ffs_dir_next(MOUNT_DISK, address)) {
-		if(ffs_dir_read(MOUNT_DISK, address, &directory) != 0) {
+			length_scanned += sizeof(struct ffs_directory), address = ffs_dir_seek(MOUNT_DISK, address, sizeof(struct ffs_directory))) {
+		if(ffs_dir_read(MOUNT_DISK, address, &directory, sizeof(struct ffs_directory)) != 0) {
 			free(base_path);
 			printf("ffs_dir_read failed\n");
 			return -ENOENT;
@@ -297,7 +280,7 @@ int ffs_unlink(const char *path)
 		return -ENOENT;
 	}
 
-	if(ffs_dir_free(MOUNT_DISK, pi.address, address) != 0) {
+	if(ffs_dir_free(MOUNT_DISK, pi.address, address, sizeof(struct ffs_directory)) != 0) {
 		printf("ffs_dir_free failed\n");
 		return -ENOENT;
 	}
@@ -316,7 +299,7 @@ int ffs_utimens(const char *path, const struct timespec tv[2])
 	// Update access time
 	pi.directory.access_time = time(NULL);
 
-	if(ffs_dir_write(MOUNT_DISK, pi.address, &pi.directory) != 0) {
+	if(ffs_dir_write(MOUNT_DISK, pi.address, &pi.directory, sizeof(struct ffs_directory)) != 0) {
 		return -ENOENT;
 	}
 
@@ -339,27 +322,34 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 		return -ENOENT;
 	}
 
-	if(size + offset > pi.directory.length && resize_directory(&pi, size + offset) != 0) {
-		FFS_ERR(2, "resize directory failure");
-		return -ENOENT;
-	}
+	const size_t last = size + offset;
 
-	uint32_t first_block;
-	uint32_t last_block;
-	if(get_block_range(pi.directory.start_block, size, offset, &first_block, &last_block) != 0) {
-		FFS_ERR(2, "block range failure");
-		return -ENOENT;
-	}
-
-	// Write block by block
-	while(first_block != last_block) {
-		if(ffs_block_write(MOUNT_DISK, first_block, buffer) != 0) {
-			FFS_ERR(2, "block write failure");
+	// Need to allocate more space for directory
+	if(last > pi.directory.length) {
+		ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address, last - pi.directory.length);
+		if(!FFS_DIR_ADDRESS_VALID(address, FFS_DIR_OFFSET_INVALID)) {
+			FFS_ERR(2, "allocated address invalid");
 			return -ENOENT;
 		}
+	}
 
-		first_block = ffs_block_next(MOUNT_DISK, first_block);
-		buffer += superblock->block_size;
+	// Update directory information
+	if(ffs_dir_read(MOUNT_DISK, pi.address, &pi.directory, sizeof(struct ffs_directory)) != 0) {
+		FFS_ERR(2, "failed to update directory");
+		return -ENOENT;
+	}
+
+	// Seek to write offset
+	ffs_address address = {pi.directory.start_block, 0};
+	address = ffs_dir_seek(MOUNT_DISK, address, offset);
+	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
+		FFS_ERR(2, "failed to seek to offset");
+		return -ENOENT;
+	}
+	
+	if(ffs_dir_write(MOUNT_DISK, address, buffer, size) != 0) {
+		FFS_ERR(2, "failed to write buffer");
+		return -ENOENT;
 	}
 
 	return 0;
@@ -401,92 +391,18 @@ int make_directory(const char *path, uint32_t flags)
 
 	free(base_path);
 
-	ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address);
-	if(ffs_dir_address_valid(MOUNT_DISK, address) != 0) {
+	ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address, sizeof(struct ffs_directory));
+	if(!FFS_DIR_ADDRESS_VALID(address, FFS_DIR_OFFSET_INVALID)) {
 		FFS_ERR(2, "allocated address is invalid");
 		return -1;
 	}
 
-	if(ffs_dir_write(MOUNT_DISK, address, &directory) != 0) {
+	if(ffs_dir_write(MOUNT_DISK, address, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(2, "directory write failure");
 		return -1;
 	}
 
 	return 0;
-}
-
-int resize_directory(struct path_info *path_info, uint32_t length)
-{
-	const struct ffs_superblock *superblock = ffs_disk_superblock(MOUNT_DISK);
-	if(!superblock) {
-		return -1;
-	}
-
-	if(length < path_info->directory.length) {
-		path_info->directory.length = length;
-
-		uint32_t parent_block = FFS_BLOCK_INVALID;
-		uint32_t last_block = path_info->directory.start_block;
-
-		for(uint32_t scanned_length = 0; scanned_length < length; scanned_length += superblock->block_size) {
-			parent_block = last_block;
-			last_block = ffs_block_next(MOUNT_DISK, last_block);
-		}
-
-		if(ffs_block_free(MOUNT_DISK, parent_block, last_block) != 0) {
-			return -1;
-		}
-	} else if(length > path_info->directory.length) {
-		path_info->directory.length = length;
-
-		// Get last block
-		uint32_t last_block = path_info->directory.start_block;
-		while(last_block != FFS_BLOCK_LAST) {
-			uint32_t next_block = ffs_block_next(MOUNT_DISK, last_block);
-			if(next_block == FFS_BLOCK_LAST) {
-				break;
-			}
-
-			last_block = next_block;
-		}
-
-		// Capacity of the directory (ie. directory block count * block size)
-		const uint32_t capacity = (1 + ((path_info->directory.length - 1) / superblock->block_size)) * superblock->block_size;
-
-		length = safe_sub(capacity, length);
-
-		// Need to allocate more blocks
-		uint8_t *zeros = calloc(superblock->block_size, 1);
-		while(length > 0) {
-			FFS_LOG(2, "allocating block length=%u", length);
-			last_block = ffs_block_alloc(MOUNT_DISK, last_block);
-			if(last_block == FFS_BLOCK_INVALID) {
-				free(zeros);
-				return -1;
-			}
-
-			if(ffs_block_write(MOUNT_DISK, last_block, zeros) != 0) {
-				free(zeros);
-				return -1;
-			}
-
-			length = safe_sub(superblock->block_size, length);
-		}
-
-		free(zeros);
-	}
-
-	// Write updated directory
-	if(ffs_dir_write(MOUNT_DISK, path_info->address, &path_info->directory) != 0) {
-		return -1;
-	}
-
-	return 0;
-}
-
-uint32_t safe_sub(uint32_t a, uint32_t b)
-{
-	return a - (b > a ? a : b);
 }
 
 char *split_path(char *path)

@@ -7,6 +7,7 @@
 #ifdef FFS_DEBUG
 
 #include <stdio.h> 
+#include <errno.h> 
 
 #define FFS_ERR(level, msg, ...) {																				\
 	if(level >= FFS_ERR_LEVEL) {																				\
@@ -27,6 +28,8 @@
 #define FFS_LOG(level, msg, ...)
 
 #endif
+
+#include <stdint.h> 
 
 // Get largest of a and b
 uint32_t max_ui32(uint32_t a, uint32_t b);

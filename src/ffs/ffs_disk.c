@@ -181,7 +181,7 @@ int ffs_disk_init(ffs_disk disk, uint32_t block_count)
     };
 
 	ffs_address root_address = ffs_dir_root(disk);
-	if(ffs_dir_write(disk, root_address, &root_directory) != 0) {
+	if(ffs_dir_write(disk, root_address, &root_directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "root directory write failed");
 		return -1;
 	}

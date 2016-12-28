@@ -13,6 +13,7 @@ int main(int argc, char** argv)
 		.read = ffs_read,
 		.readdir = ffs_readdir,
 		.rmdir = ffs_unlink,
+		.truncate = ffs_truncate,
 		.unlink = ffs_unlink,
 		.utimens = ffs_utimens,
 		.write = ffs_write,

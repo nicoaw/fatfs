@@ -17,6 +17,8 @@ int ffs_read(const char *path, char *buffer, size_t size, off_t offset, struct f
 
 int ffs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *file_info);
 
+int ffs_truncate(const char *path, off_t size);
+
 int ffs_unlink(const char *path);
 
 int ffs_utimens(const char *path, const struct timespec tv[2]);
