@@ -95,6 +95,11 @@ int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_a
 	const uint32_t first = ffs_dir_tell(disk, start_address, offset_address);
 	const uint32_t last = first + size;
 
+	if(first == FFS_DIR_OFFSET_INVALID) {
+		FFS_ERR(1, "offset invalid");
+		return -1;
+	}
+
 	// Invalid range specified
 	if(directory.length < last) {
 		FFS_ERR(1, "invalid range");

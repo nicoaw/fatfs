@@ -136,26 +136,38 @@ int ffs_read(const char *path, char *buffer, size_t size, off_t offset, struct f
 
 	const struct ffs_superblock *superblock = ffs_disk_superblock(MOUNT_DISK);
 	if(!superblock) {
-		return -ENOENT;
+		FFS_ERR(2, "superblock retrieval failure");
+		return -EIO;
 	}
 
 	struct path_info pi;
 	if(get_path_info(path, &pi) != 0) {
-		return -ENOENT;
+		FFS_ERR(2, "path info retrieval failure");
+		return -EIO;
+	}
+
+	const uint32_t last = min_ui32(pi.directory.length, offset + size);
+
+	// Out of range, can't read anything
+	if(offset < 0 || last == 0) {
+		FFS_ERR(2, "out of range");
+		return 0;
 	}
 
 	// Seek to read offset
 	ffs_address address = {pi.directory.start_block, 0};
 	address = ffs_dir_seek(MOUNT_DISK, address, offset);
 	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
-		return -ENOENT;
+		FFS_ERR(2, "failed to seek to offset");
+		return -EIO;
 	}
 	
-	if(ffs_dir_read(MOUNT_DISK, address, buffer, size) != 0) {
-		return -ENOENT;
+	if(ffs_dir_read(MOUNT_DISK, address, buffer, last - offset) != 0) {
+		FFS_ERR(2, "failed to read buffer");
+		return -EIO;
 	}
 
-	return 0;
+	return size;
 }
 
 int ffs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *file_info)
@@ -239,49 +251,30 @@ int ffs_unlink(const char *path)
 	strcpy(base_path, path);
 	const char *name = split_path(base_path);
 
-	struct path_info pi;
-	if(get_path_info(base_path, &pi) != 0) {
+	struct path_info base_pi;
+	if(get_path_info(base_path, &base_pi) != 0) {
 		free(base_path);
-		printf("get_path_info failed\n");
+		FFS_ERR(2, "base path info retrieval failure\n");
 		return -ENOENT;
 	}
 
-	// Find and directory with specified name
-	ffs_address address = {pi.directory.start_block, 0};
-	struct ffs_directory directory;
-	int found_directory = 0;
-	for(
-			uint32_t length_scanned = 0;
-			length_scanned < pi.directory.length;
-			length_scanned += sizeof(struct ffs_directory), address = ffs_dir_seek(MOUNT_DISK, address, sizeof(struct ffs_directory))) {
-		if(ffs_dir_read(MOUNT_DISK, address, &directory, sizeof(struct ffs_directory)) != 0) {
-			free(base_path);
-			printf("ffs_dir_read failed\n");
-			return -ENOENT;
-		}
-
-		if(strcmp(directory.name, name) == 0) {
-			found_directory = 1;
-			break;
-		}
+	struct path_info pi;
+	if(get_path_info(path, &pi) != 0) {
+		free(base_path);
+		FFS_ERR(2, "path info retrieval failure\n");
+		return -ENOENT;
 	}
 
 	free(base_path);
 
-	if(!found_directory) {
-		printf("directory not found\n");
-		return -ENOENT;
-	}
-
 	// Since this is the last link, delete directory and its data
-	
-	if(ffs_block_free(MOUNT_DISK, FFS_BLOCK_INVALID, directory.start_block) != 0) {
-		printf("ffs_block_free failed\n");
+	if(ffs_block_free(MOUNT_DISK, FFS_BLOCK_INVALID, pi.directory.start_block) != 0) {
+		FFS_ERR(2, "ffs_block_free failed");
 		return -ENOENT;
 	}
 
-	if(ffs_dir_free(MOUNT_DISK, pi.address, address, sizeof(struct ffs_directory)) != 0) {
-		printf("ffs_dir_free failed\n");
+	if(ffs_dir_free(MOUNT_DISK, base_pi.address, pi.address, sizeof(struct ffs_directory)) != 0) {
+		FFS_ERR(2, "ffs_dir_free failed\n");
 		return -ENOENT;
 	}
 
@@ -313,13 +306,19 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 	const struct ffs_superblock *superblock = ffs_disk_superblock(MOUNT_DISK);
 	if(!superblock) {
 		FFS_ERR(2, "superblock retrieval failure");
-		return -ENOENT;
+		return -EIO;
 	}
 
 	struct path_info pi;
 	if(get_path_info(path, &pi) != 0) {
 		FFS_ERR(2, "path info retrieval failure");
-		return -ENOENT;
+		return -EIO;
+	}
+
+	if(offset < 0)
+	{
+		FFS_ERR(2, "offset out of range");
+		return 0;
 	}
 
 	const size_t last = size + offset;
@@ -329,14 +328,14 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 		ffs_address address = ffs_dir_alloc(MOUNT_DISK, pi.address, last - pi.directory.length);
 		if(!FFS_DIR_ADDRESS_VALID(address, FFS_DIR_OFFSET_INVALID)) {
 			FFS_ERR(2, "allocated address invalid");
-			return -ENOENT;
+			return -EIO;
 		}
 	}
 
-	// Update directory information
+	// Update directory information (if start block is modified)
 	if(ffs_dir_read(MOUNT_DISK, pi.address, &pi.directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(2, "failed to update directory");
-		return -ENOENT;
+		return -EIO;
 	}
 
 	// Seek to write offset
@@ -344,15 +343,15 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 	address = ffs_dir_seek(MOUNT_DISK, address, offset);
 	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
 		FFS_ERR(2, "failed to seek to offset");
-		return -ENOENT;
+		return -EIO;
 	}
 	
 	if(ffs_dir_write(MOUNT_DISK, address, buffer, size) != 0) {
 		FFS_ERR(2, "failed to write buffer");
-		return -ENOENT;
+		return -EIO;
 	}
 
-	return 0;
+	return size;
 }
 
 int make_directory(const char *path, uint32_t flags)
