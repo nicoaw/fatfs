@@ -33,14 +33,13 @@ typedef struct {
 
 extern const ffs_address FFS_DIR_ADDRESS_INVALID;
 
-// Allocate size bytes in the directory associated with parent address
-// Returns allocated address on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
+// Allocate size bytes at the end of the directory associated with parent address
+// Returns address of allocted space on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t size);
 
-// Free size bytes at offset in the directory associated with parent address
-// Offset must be a child address of specified directory
+// Free size bytes at the end of the directory associated with parent address
 // Returns zero on success; otherwise, returns non-zero
-int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_address, uint32_t size);
+int ffs_dir_free(ffs_disk disk, ffs_address parent_address, uint32_t size);
 
 // Get address for the directory pointed to by path, starting at specified root directory
 // Path must be relative to specified root address

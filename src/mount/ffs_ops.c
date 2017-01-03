@@ -254,14 +254,14 @@ int ffs_unlink(const char *path)
 	struct path_info base_pi;
 	if(get_path_info(base_path, &base_pi) != 0) {
 		free(base_path);
-		FFS_ERR(2, "base path info retrieval failure\n");
+		FFS_ERR(2, "base path info retrieval failure");
 		return -ENOENT;
 	}
 
 	struct path_info pi;
 	if(get_path_info(path, &pi) != 0) {
 		free(base_path);
-		FFS_ERR(2, "path info retrieval failure\n");
+		FFS_ERR(2, "path info retrieval failure");
 		return -ENOENT;
 	}
 
@@ -274,7 +274,7 @@ int ffs_unlink(const char *path)
 	}
 
 	if(ffs_dir_free(MOUNT_DISK, base_pi.address, pi.address, sizeof(struct ffs_directory)) != 0) {
-		FFS_ERR(2, "ffs_dir_free failed\n");
+		FFS_ERR(2, "ffs_dir_free failed");
 		return -ENOENT;
 	}
 
@@ -330,16 +330,17 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 			FFS_ERR(2, "allocated address invalid");
 			return -EIO;
 		}
-	}
 
-	// Update directory information (if start block is modified)
-	if(ffs_dir_read(MOUNT_DISK, pi.address, &pi.directory, sizeof(struct ffs_directory)) != 0) {
-		FFS_ERR(2, "failed to update directory");
-		return -EIO;
+		// Update directory information (if start block is modified)
+		if(ffs_dir_read(MOUNT_DISK, pi.address, &pi.directory, sizeof(struct ffs_directory)) != 0) {
+			FFS_ERR(2, "failed to update directory");
+			return -EIO;
+		}
 	}
 
 	// Seek to write offset
 	ffs_address address = {pi.directory.start_block, 0};
+	FFS_LOG(2, "address={block=%d offset=%u}", address.block, address.offset);
 	address = ffs_dir_seek(MOUNT_DISK, address, offset);
 	if(!FFS_DIR_ADDRESS_VALID(address, superblock->block_size)) {
 		FFS_ERR(2, "failed to seek to offset");
@@ -354,6 +355,8 @@ int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, s
 	return size;
 }
 
+//TODO: somehow can't make more than three directories per parent directory
+//		maybe block boundaries are cause
 int make_directory(const char *path, uint32_t flags)
 {
 	// Need a mutable path to split it

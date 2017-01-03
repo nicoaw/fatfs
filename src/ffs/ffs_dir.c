@@ -27,17 +27,18 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t si
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
+	// Currently allocated space
+	uint32_t allocated = 0;
+
 	// Need to preallocate start block if directory is empty
 	if(directory.start_block == FFS_BLOCK_LAST) {
 		directory.start_block = ffs_block_alloc(disk, FFS_BLOCK_LAST);
+		allocated += superblock->block_size;
 	}
 
 	// Get address after last allocated data
 	ffs_address address = {directory.start_block, 0};
 	address = ffs_dir_seek(disk, address, directory.length);
-
-	// Currently allocated space
-	uint32_t allocated = 0;
 
 	// Allocate a new block if offset is block size
 	if(address.offset == superblock->block_size) {
@@ -73,7 +74,7 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t si
 	return address;
 }
 
-int ffs_dir_free(ffs_disk disk, ffs_address parent_address, ffs_address offset_address, uint32_t size)
+int ffs_dir_free(ffs_disk disk, ffs_address parent_address, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} offset={block=%u offset=%u} size=%u", disk, parent_address.block, parent_address.offset, offset_address.block, offset_address.offset, size);
 
@@ -205,6 +206,9 @@ ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const c
 
 	ffs_address address = {parent_directory.start_block, 0};
 	for(uint32_t length_read = 0; length_read < parent_directory.length; length_read += sizeof(struct ffs_directory)) {
+		//TODO: somehow address is FFS_BLOCK_LAST with parenet_directory.length of 64 for .swp files
+		//		maybe they aren't allocated correctly
+		//		maybe other files aren't being freed correctly
 		struct ffs_directory directory;
 		if(ffs_dir_read(disk, address, &directory, sizeof(struct ffs_directory)) != 0) {
 			FFS_ERR(1, "directory read failed");
