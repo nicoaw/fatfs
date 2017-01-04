@@ -4,34 +4,43 @@
 #include "ffs_disk.h"
 
 #define FFS_BLOCK_FREE			 0
-#define FFS_BLOCK_LAST			-2
 #define FFS_BLOCK_INVALID		-1
+#define FFS_BLOCK_LAST			-2
 
 #define FFS_BLOCK_SUPERBLOCK	 0
 #define FFS_BLOCK_FAT			 (FFS_BLOCK_SUPERBLOCK + 1)
 
-// Allocate a new block after specified block
-// If specified block is FFS_BLOCK_LAST then newly allocated block is first
-// Returns new block on success; otherwise, returns FFS_BLOCK_INVALID
-uint32_t ffs_block_alloc(ffs_disk disk, uint32_t parent_block);
+#define FFS_BLOCK_VALID(block) 	 (block != FFS_BLOCK_FREE || block != FFS_BLOCK_INVALID || block != FFS_BLOCK_LAST)
 
-// Mark all blocks in the block list starting at specified block as FFS_BLOCK_FREE
-// If parent block is FFS_BLOCK_INVALID, block is assumed to have no parent
-// Returns zero on success; otherwise, returns non-zero
-int ffs_block_free(ffs_disk disk, uint32_t parent_block, uint32_t block);
+// A FAT filesystem block id
+typedef uint32_t block;
 
-// Get the next block in the block list
-// Returns next block on success; otherwise, returns FFS_BLOCK_LAST
-uint32_t ffs_block_next(ffs_disk disk, uint32_t block);
+// Allocate a block before next
+// Next can be FFS_BLOCK_LAST
+// Returns FFS_BLOCK_INVALID on failure
+block ffs_block_alloc(ffs_disk disk, block next);
+
+// Free head in block list
+// Head must be valid
+// Returns non-zero on failure
+int ffs_block_free(ffs_disk disk, block head);
+
+// Get next block in block list
+// Previous must be valid or FFS_BLOCK_LAST
+// Returns FFS_BLOCK_LAST when previous is last block
+// Returns FFS_BLOCK_INVALID on failure
+block ffs_block_next(ffs_disk disk, block previous);
 
 // Read entire contents of specified block to buffer
+// Offset must be valid
 // Buffer must be size of a block
-// Returns zero on success; otherwise, returns non-zero
-int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer);
+// Returns non-zero on failure
+int ffs_block_read(ffs_disk disk, block offset, void *buffer);
 
 // Write entire contents of specified block from buffer
+// Offset must be valid
 // Buffer must be size of a block
 // Returns zero on success; otherwise, returns non-zero
-int ffs_block_write(ffs_disk disk, uint32_t block, const void *buffer);
+int ffs_block_write(ffs_disk disk, block offset, const void *buffer);
 
 #endif

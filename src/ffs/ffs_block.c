@@ -2,184 +2,114 @@
 #include <ffs/ffs_block.h>
 #include <stdlib.h>
 
-#define FFS_BLOCK_FAT_ENTRY_COUNT(block_size)	(block_size / sizeof(uint32_t))
-#define FFS_BLOCK_FAT_BLOCK(block_size, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
-#define FFS_BLOCK_FAT_ENTRY(block_size, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(block_size))
+#define FFS_BLOCK_FAT_ENTRY_COUNT(sb)	(sb->block_size / sizeof(block))
+#define FFS_BLOCK_FAT_BLOCK(sb, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(sb->block_size))
+#define FFS_BLOCK_FAT_ENTRY(sb, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(sb->block_size))
 
-uint32_t ffs_block_alloc(ffs_disk disk, uint32_t parent_block)
+block ffs_block_alloc(ffs_disk disk, block next)
 {
-	FFS_LOG(0, "disk=%p parent_block=%u", disk, parent_block);
+	FFS_LOG(0, "disk=%p next=%u", disk, next);
 
-	if(parent_block == FFS_BLOCK_INVALID || parent_block == FFS_BLOCK_FREE) {
-		FFS_ERR(0, "specified parent block invalid");
+	// Next must be valid or FFS_BLOCK_LAST
+	if(next != FFS_BLOCK_LAST && !FFS_BLOCK_VALID(next)) {
+		FFS_ERR(0, "next block invalid");
 		return FFS_BLOCK_INVALID;
 	}
 
-    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-    if(!superblock) {
-		FFS_ERR(0, "superblock retrieval failed");
-        return FFS_BLOCK_INVALID;
-    }
-
-	const uint32_t fat_block_entry_count = FFS_BLOCK_FAT_ENTRY_COUNT(superblock->block_size);
+    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+	block *fat_buffer = malloc(sb->block_size);
 
 	// Find a free block using FAT
-	uint32_t *fat = malloc(superblock->block_size);
-	for(uint32_t i = 0; i < superblock->fat_block_count; ++i) {
-		const uint32_t fat_block = FFS_BLOCK_FAT + i;
-
-		if(ffs_block_read(disk, fat_block, fat) != 0) {
-			free(fat);
-			FFS_ERR(0, "FAT block read failed");
+	for(uint32_t i = 0; i < sb->fat_block_count; ++i) {
+		// Read FAT
+		const block fat = FFS_BLOCK_FAT + i;
+		if(ffs_block_read(disk, fat, fat_buffer) != 0) {
+			free(fat_buffer);
+			FFS_ERR(0, "FAT read failed");
 			return FFS_BLOCK_INVALID;
 		}
 
-		for(uint32_t j = 0; j < fat_block_entry_count; ++j) {
+		for(uint32_t j = 0; j < FFS_BLOCK_FAT_ENTRY_COUNT(sb); ++j) {
 			// Found free block
-			if(fat[j] == FFS_BLOCK_FREE) {
-				const uint32_t block = j + i * fat_block_entry_count;
-				fat[j] = FFS_BLOCK_LAST;
+			if(fat_buffer[j] == FFS_BLOCK_FREE) {
+				const block free = j + i * fat_block_entry_count;
+				fat_buffer[j] = next;
 
-				if(ffs_block_write(disk, fat_block, fat) != 0) {
-					free(fat);
-					FFS_ERR(0, "FAT block write failed");
+				// Write updated FAT
+				if(ffs_block_write(disk, fat, fat_buffer) != 0) {
+					free(fat_buffer);
+					FFS_ERR(0, "FAT write failed");
 					return FFS_BLOCK_INVALID;
 				}
 
-				// Set parent block's next
-				if(parent_block != FFS_BLOCK_LAST) {
-					const uint32_t parent_fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, parent_block);
-					const uint32_t parent_fat_entry = FFS_BLOCK_FAT_ENTRY(superblock->block_size, parent_block);
-
-					if(ffs_block_read(disk, parent_fat_block, fat) != 0) {
-						free(fat);
-						FFS_ERR(0, "parent FAT block read failed");
-						return FFS_BLOCK_INVALID;
-					}
-
-					fat[FFS_BLOCK_FAT_ENTRY(superblock->block_size, parent_block)] = block;
-
-					if(ffs_block_write(disk, parent_fat_block, fat) != 0) {
-						free(fat);
-						FFS_ERR(0, "parent FAT block write failed");
-						return FFS_BLOCK_INVALID;
-					}
-				}
-
-				free(fat);
+				free(fat_buffer);
 				return block;
 			}
 		}
 	}
 
-	free(fat);
-	FFS_ERR(0, "block allocation failed");
+	free(fat_buffer);
+	FFS_ERR(0, "failed to find free block");
 	return FFS_BLOCK_INVALID;
 }
 
-int ffs_block_free(ffs_disk disk, uint32_t parent_block, uint32_t block)
+int ffs_block_free(ffs_disk disk, block head)
 {
-	FFS_LOG(0, "disk=%p parent_block=%u block=%u", disk, parent_block, block);
+	FFS_LOG(0, "disk=%p head=%u", disk, head);
 
-	if(parent_block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
-		FFS_ERR(0, "specified parent block or block invalid");
+	// Head must be valid
+	if(!FFS_BLOCK_VALID(head)) {
+		FFS_ERR(0, "head block invalid");
 		return -1;
 	}
 
-    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-    if(!superblock) {
-		FFS_ERR(0, "superblock retrieval failed");
-        return -1;
-    }
+    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+	const block fat = FFS_BLOCK_FAT_BLOCK(sb, head);
+	block *fat_buffer = malloc(sb->block_size);
 
-	uint32_t *fat = malloc(superblock->block_size);
-
-	// Unlink child block from parent
-	if(parent_block != FFS_BLOCK_INVALID) {
-		const uint32_t parent_fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, parent_block);
-		if(ffs_block_read(disk, parent_fat_block, fat) != 0) {
-			free(fat);
-			FFS_ERR(0, "parent FAT block read failed");
-			return -1;
-		}
-
-		fat[FFS_BLOCK_FAT_ENTRY(superblock->block_size, parent_block)] = FFS_BLOCK_LAST;
-
-		if(ffs_block_write(disk, parent_fat_block, fat) != 0) {
-			free(fat);
-			FFS_ERR(0, "parent FAT block write failed");
-			return -1;
-		}
+	// Read FAT
+	if(ffs_block_read(disk, fat, fat_buffer) != 0) {
+		free(fat_buffer);
+		FFS_ERR(0, "FAT read failed");
+		return -1;
 	}
 
-	// Dont need to free blocks if it is the last block
-	if(block == FFS_BLOCK_LAST) {
-		free(fat);
-		return 0;
+	fat_buffer[FFS_BLOCK_FAT_ENTRY(sb, head)] = FFS_BLOCK_FREE;
+
+	// Write updated FAT
+	if(ffs_block_write(disk, fat, fat_buffer) != 0) {
+		free(fat_buffer);
+		FFS_ERR(0, "FAT read failed");
+		return -1;
 	}
 
-	// Free child blocks in block list
-	// Doesn't use block_next for effeciency, but might be wise since DRY
-	uint32_t fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
-	uint32_t fat_entry = FFS_BLOCK_FAT_ENTRY(superblock->block_size, block);
-	uint32_t next_block;
-	while(1) {
-		if(ffs_block_read(disk, fat_block, fat) != 0) {
-			free(fat);
-			FFS_ERR(0, "FAT block read failed");
-			return -1;
-		}
-
-		next_block = fat[fat_entry];
-		fat[fat_entry] = FFS_BLOCK_FREE;
-
-		if(ffs_block_write(disk, fat_block, fat) != 0) {
-			free(fat);
-			FFS_ERR(0, "FAT block write failed");
-			return -1;
-		}
-
-		if(next_block == FFS_BLOCK_LAST) {
-			free(fat);
-			return 0;
-		}
-
-		block = next_block;
-		fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
-		fat_entry = FFS_BLOCK_FAT_ENTRY(superblock->block_size, block);
-	}
-
-	free(fat);
-	FFS_ERR(0, "block free failed");
-	return -1;
+	free(fat_buffer);
+	return 0;
 }
 
-uint32_t ffs_block_next(ffs_disk disk, uint32_t block)
+block ffs_block_next(ffs_disk disk, block previous)
 {
-	FFS_LOG(0, "disk=%p block=%u", disk, block);
+	FFS_LOG(0, "disk=%p previous=%u", disk, previous);
 
-	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
-		FFS_ERR(0, "specified block invalid");
-		return FFS_BLOCK_LAST;
+	// Previous must be valid
+	if(!FFS_BLOCK_VALID(previous)) {
+		FFS_ERR(0, "previous block invalid");
+		return FFS_BLOCK_INVALID;
 	}
 
-    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-    if(!superblock) {
-		FFS_ERR(0, "superblock retrieval failed");
-        return FFS_BLOCK_LAST;
-    }
+    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+	const block fat = FFS_BLOCK_FAT_BLOCK(sb, previous);
+	block *fat_buffer = malloc(sb->block_size);
 
-	const uint32_t fat_block = FFS_BLOCK_FAT_BLOCK(superblock->block_size, block);
-
-	uint32_t *fat = malloc(superblock->block_size);
-	if(ffs_block_read(disk, fat_block, fat) != 0) {
-		free(fat);
-		FFS_ERR(0, "FAT block read failed");
-		return FFS_BLOCK_LAST;
+	// Read FAT
+	if(ffs_block_read(disk, fat, fat_buffer) != 0) {
+		free(fat_buffer);
+		FFS_ERR(0, "FAT read failed");
+		return FFS_BLOCK_INVALID;
 	}
 
 	// Get next block according to FAT
-	uint32_t next_block = fat[FFS_BLOCK_FAT_ENTRY(superblock->block_size, block)];
+	block next = fat_buffer[FFS_BLOCK_FAT_ENTRY(sb, previous)];
 	free(fat);
-	return next_block;
+	return next;
 }
