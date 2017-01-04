@@ -4,157 +4,98 @@
 #include <stdlib.h>
 #include <string.h>
 
-const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, FFS_DIR_OFFSET_INVALID};
+extern const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 
-// Recursively find path address in parent directory starting with name
-// Returns address of path on success; otherwise, returns FFS_DIR_ADDRESS_INVALID
-ffs_address ffs_dir_path_impl(ffs_disk disk, ffs_address parent_address, const char *name);
+// Recursively find address in parent directory starting with name
+// Returns invalid address on failure
+ffs_address ffs_dir_find_impl(ffs_disk disk, const struct ffs_directory *parent, const char *name);
 
-ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address parent_address, uint32_t size)
+ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} size=%u", disk, parent_address.block, parent_address.offset, size);
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} size=%u", disk, entry.block, entry.offset, size);
 
-	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-	if(!superblock) {
-		FFS_ERR(1, "superblock retrieval failed");
-		return FFS_DIR_ADDRESS_INVALID;
-	}
+	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory to allocate space for
 	struct ffs_directory directory;
-	if(ffs_dir_read(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_read(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory read failed");
-		return FFS_DIR_ADDRESS_INVALID;
+		return -1;
 	}
 
-	// Currently allocated space
+	const uint32_t unallocated = sb->block_size - directory.length % sb->block_size;
 	uint32_t allocated = 0;
 
-	// Need to preallocate start block if directory is empty
-	if(directory.start_block == FFS_BLOCK_LAST) {
-		directory.start_block = ffs_block_alloc(disk, FFS_BLOCK_LAST);
-		allocated += superblock->block_size;
+	// Psuedo-allocate rest of head block
+	if(unallocated != sb->block_size) {
+		allocated += unallocated;
 	}
 
-	// Get address after last allocated data
-	ffs_address address = {directory.start_block, 0};
-	address = ffs_dir_seek(disk, address, directory.length);
-
-	// Allocate a new block if offset is block size
-	if(address.offset == superblock->block_size) {
-		address.block = ffs_block_alloc(disk, address.block);
-		address.offset = 0;
-		allocated += superblock->block_size;
-
-		if(address.block == FFS_BLOCK_INVALID) {
-			FFS_ERR(1, "block allocation failure");
-			return FFS_DIR_ADDRESS_INVALID;
-		}
-	}
-
-	// Allocate the rest of the blocks
-	uint32_t block = address.block;
+	// Allocate appropriate amount of blocks
 	while(allocated < size) {
-		block = ffs_block_alloc(disk, block);
-		allocated += superblock->block_size;
-
-		if(block == FFS_BLOCK_INVALID) {
+		directory.start_block = ffs_block_alloc(disk, directory.start_block);
+		if(!FFS_BLOCK_VALID(directory.start_block)) {
+			// TODO: already allocated blocks are lost because the directory is not updated
 			FFS_ERR(1, "block allocation failure");
-			return FFS_DIR_ADDRESS_INVALID;
+			return -1;
 		}
+
+		allocated += sb->block_size;
 	}
 
 	// Write updated directory information
 	directory.length += size;
-	if(ffs_dir_write(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory write failed");
-		return FFS_DIR_ADDRESS_INVALID;
+		return -1;
 	}
 
 	return address;
 }
 
-int ffs_dir_free(ffs_disk disk, ffs_address parent_address, uint32_t size)
+int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p parent_address={block=%u offset=%u} offset={block=%u offset=%u} size=%u", disk, parent_address.block, parent_address.offset, offset_address.block, offset_address.offset, size);
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} size=%u", disk, entry.block, entry.offset, size);
 
-	const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-	if(!superblock) {
-		FFS_ERR(1, "superblock retrieval failed");
-		return -1;
-	}
+	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory to free space from
 	struct ffs_directory directory;
-	if(ffs_dir_read(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_read(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
 
-	const ffs_address start_address = {directory.start_block, 0};
-	// Range to be freed
-	const uint32_t first = ffs_dir_tell(disk, start_address, offset_address);
-	const uint32_t last = first + size;
-
-	if(first == FFS_DIR_OFFSET_INVALID) {
-		FFS_ERR(1, "offset invalid");
+	// Cannot free more space then the directory currently has allocated
+	if(size > directory.length) {
+		FFS_ERR(1, "invalid free range");
 		return -1;
 	}
 
-	// Invalid range specified
-	if(directory.length < last) {
-		FFS_ERR(1, "invalid range");
-		return -1;
-	} else if(directory.length == last) {
-		// Optimized way to free entire directory
-		if(ffs_block_free(disk, FFS_BLOCK_INVALID, directory.start_block) != 0) {
-			FFS_ERR(1, "failed to free entire directory");
+	// Psuedo-free allocated space in head block
+	const uint32_t allocated = directory.length % sb->block_size;
+	uint32_t freed = allocated;
+
+	while(freed <= size) {
+		// Get next block before freeing the head
+		block next = ffs_block_next(disk, directory.start_block);
+		if(next != FFS_BLOCK_LAST && !FFS_BLOCK_VALID(next)) {
+			FFS_ERR(1, "failed to get next block");
 			return -1;
 		}
 
-		directory.start_block = FFS_BLOCK_LAST;
-	} else {
-		ffs_address last_address = ffs_dir_seek(disk, start_address, last);
-		if(!FFS_DIR_ADDRESS_VALID(last_address, FFS_DIR_OFFSET_INVALID)) {
-			FFS_ERR(1, "failed to seek to last");
+		if(ffs_block_free(disk, directory.start_block) != 0) {
+			FFS_ERR(1, "failed to free block");
 			return -1;
 		}
 
-		const uint32_t move_size = directory.length - last;
-		void *data = malloc(move_size);
-
-		// Read data to be moved forward
-		if(ffs_dir_read(disk, last_address, data, move_size) != 0) {
-			FFS_ERR(1, "failed to read data to be moved");
-			free(data);
-			return -1;
-		}
-
-		// Write data to be moved forward
-		if(ffs_dir_write(disk, offset_address, data, move_size) != 0) {
-			FFS_ERR(1, "failed to write data to be moved");
-			free(data);
-		}
-
-		free(data);
-
-		// Get new last address after move
-		last_address = ffs_dir_seek(disk, last_address, first + move_size);
-		if(!FFS_DIR_ADDRESS_VALID(last_address, FFS_DIR_OFFSET_INVALID)) {
-			FFS_ERR(1, "failed to seek to last");
-			return -1;
-		}
-
-		// Free unused blocks
-		if(ffs_block_free(disk, last_address.block, ffs_block_next(disk, last_address.block)) != 0) {
-			FFS_ERR(1, "failed to free unused blocks");
-			return -1;
-		}
+		directory.start_block = next;
+		freed += sb->block_size;
 	}
 	
 	// Write updated directory information
 	directory.length -= size;
-	if(ffs_dir_write(disk, parent_address, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
