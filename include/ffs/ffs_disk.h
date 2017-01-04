@@ -17,19 +17,18 @@ struct __attribute__((__packed__)) ffs_superblock {
 };
 
 // Close a FAT filesystem disk
-// Returns zero on success; otherwise, returns non-zero
+// Returns non-zero on failure
 int ffs_disk_close(ffs_disk disk);
 
-// Initialize a FAT filesystem on specifed disk
-// Returns zero on success; otherwise, returns non-zero
-int ffs_disk_init(ffs_disk disk, uint32_t block_count);
+// Format a FAT filesystem according to a superblock
+// Returns non-zero on failure
+int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb);
 
-// Open a FAT filesystem disk with name pointed to by path
-// Returns disk on success; otherwise, returns NULL
+// Open a FAT filesystem disk
+// Returns NULL on failure
 ffs_disk ffs_disk_open(const char *path);
 
-// Get FAT filesystem superblock for specified disk
-// Returns superblock on success; otherwise, returns NULL
+// Get FAT superblock
 const struct ffs_superblock *ffs_disk_superblock(const ffs_disk disk);
 
 #endif

@@ -15,30 +15,27 @@ struct ffs_disk_info {
 };
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer)
+int ffs_block_read(ffs_disk disk, block offset, void *buffer)
 {
-	FFS_LOG(0, "disk=%p block=%u buffer=%p", disk, block, buffer);
+	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 
-	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
-		FFS_ERR(0, "specified block invalid");
+	// Offset must be valid
+	if(!FFS_BLOCK_VALID(offset)) {
+		FFS_ERR(0, "offset block invalid");
 		return -1;
 	}
 
-    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-    if(!superblock) {
-		FFS_ERR(0, "superblock retrieval failed");
-        return -1;
-    }
+    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Seek to block position
-	if(fseek(disk->file, block * superblock->block_size, SEEK_SET) != 0) {
-		FFS_ERR(0, "block seek failed");
+	if(fseek(disk->file, offset * sb->block_size, SEEK_SET) != 0) {
+		FFS_ERR(0, "disk seek failed");
 		return -1;
 	}
 
 	// Read entire block
-	if(fread(buffer, superblock->block_size, 1, disk->file) != 1) {
-		FFS_ERR(0, "block read failed");
+	if(fread(buffer, sb->block_size, 1, disk->file) != 1) {
+		FFS_ERR(0, "disk read failed");
 		return -1;
 	}
 
@@ -46,30 +43,27 @@ int ffs_block_read(ffs_disk disk, uint32_t block, void *buffer)
 }
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_write(ffs_disk disk, uint32_t block, const void *buffer)
+int ffs_block_write(ffs_disk disk, block offset, const void *buffer)
 {
-	FFS_LOG(0, "disk=%p block=%u buffer=%p", disk, block, buffer);
+	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 
-	if(block == FFS_BLOCK_LAST || block == FFS_BLOCK_INVALID) {
-		FFS_ERR(0, "specified block invalid");
+	// Offset must be valid
+	if(!FFS_BLOCK_VALID(offset)) {
+		FFS_ERR(0, "offset block invalid");
 		return -1;
 	}
 
-    const struct ffs_superblock *superblock = ffs_disk_superblock(disk);
-    if(!superblock) {
-		FFS_ERR(0, "superblock retrieval failed");
-        return -1;
-    }
+    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Seek to block position
-	if(fseek(disk->file, block * superblock->block_size, SEEK_SET) != 0) {
-		FFS_ERR(0, "block seek failed");
+	if(fseek(disk->file, offset * sb->block_size, SEEK_SET) != 0) {
+		FFS_ERR(0, "disk seek failed");
 		return -1;
 	}
 
-	// Read entire block
-	if(fwrite(buffer, superblock->block_size, 1, disk->file) != 1) {
-		FFS_ERR(0, "block write failed");
+	// Write entire block
+	if(fwrite(buffer, sb->block_size, 1, disk->file) != 1) {
+		FFS_ERR(0, "disk write failed");
 		return -1;
 	}
 
@@ -79,12 +73,6 @@ int ffs_block_write(ffs_disk disk, uint32_t block, const void *buffer)
 int ffs_disk_close(ffs_disk disk)
 {
 	FFS_LOG(1, "disk=%p", disk);
-
-    // Disk must not be NULL
-    if(!disk) {
-		FFS_ERR(1, "specified disk is invalid");
-        return -1;
-    }
 
     // Must be able to close disk file
     if(fclose(disk->file) != 0) {
@@ -98,74 +86,63 @@ int ffs_disk_close(ffs_disk disk)
     return 0;
 }
 
-int ffs_disk_init(ffs_disk disk, uint32_t block_count)
+int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 {
 	FFS_LOG(1, "disk=%p block_count=%zd", disk, block_count);
 
-    const uint32_t fat_size = block_count * sizeof(uint32_t);
+	/*
+	   const uint32_t fat_size = block_count * sizeof(uint32_t);
+	   disk->superblock.magic = 0x2345beef;
+	   disk->superblock.block_count = block_count;
+	   disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
+	   disk->superblock.fat_block_count = fat_size / disk->superblock.block_size + (fat_size % disk->superblock.block_size > 0);
+	   disk->superblock.root_block = 1 + disk->superblock.fat_block_count;
+	   */
 
-    // Setup disk superblock
-    disk->superblock.magic = 0x2345beef;
-    disk->superblock.block_count = block_count;
-    disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
-    disk->superblock.fat_block_count = fat_size / disk->superblock.block_size + (fat_size % disk->superblock.block_size > 0);
-	disk->superblock.root_block = 1 + disk->superblock.fat_block_count;
+	disk->superblock = sb;
 
-	char *buffer = malloc(disk->superblock.block_size);
-	for(uint32_t i = 0; i < disk->superblock.block_size; ++i) {
-		buffer[i] = 0;
-	}
+	void *buffer = malloc(disk->superblock.block_size);
+	memset(buffer, 0, disk->superblock.block_size);
 
-	for(uint32_t i = 0; i < disk->superblock.block_count; ++i) {
+	// Fill disk with zeros
+	for(block i = 0; i < disk->superblock.block_count; ++i) {
 		ffs_block_write(disk, i, buffer);
 	}
+
 	free(buffer);
 
-    // Need a buffer to store a block
-    struct ffs_superblock *superblock_buffer = malloc(disk->superblock.block_size);
-    if(!superblock_buffer) {
-		FFS_ERR(1, "superblock buffer allocation failed");
-        return -1;
-    }
-
-    *superblock_buffer = disk->superblock;
-
-    // Write superblock to be read when the disk is opened
-    if(ffs_block_write(disk, FFS_BLOCK_SUPERBLOCK, superblock_buffer) != 0) {
-		free(superblock_buffer);
+	// Write superblock on disk
+	if(fwrite(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file) != 1) {
 		FFS_ERR(1, "superblock write failed");
-        return -1;
-    }
+		return NULL;
+	}
 
-    free(superblock_buffer);
-
-	uint32_t *fat = malloc(disk->superblock.block_count * sizeof(uint32_t));
-    if(!fat) {
+	block *fat_buffer = malloc(disk->superblock.block_count * sizeof(block));
+    if(!fat_buffer) {
 		FFS_ERR(1, "FAT buffer allocation failed");
         return -1;
     }
 
-	for(uint32_t i = 0; i < disk->superblock.block_count; ++i) {
+	for(block i = 0; i < disk->superblock.block_count; ++i) {
 		if(i == disk->superblock.root_block) {
-			fat[i] = FFS_BLOCK_LAST;
+			fat_buffer[i] = FFS_BLOCK_LAST;
 		} else if(i < disk->superblock.fat_block_count + 1) {
-			fat[i] = FFS_BLOCK_INVALID;
+			fat_buffer[i] = FFS_BLOCK_INVALID;
 		} else {
-			fat[i] = FFS_BLOCK_FREE;
+			fat_buffer[i] = FFS_BLOCK_FREE;
 		}
 	}
 
 	// Write FAT block by block
 	for(uint32_t i = 0; i < disk->superblock.fat_block_count; ++i) {
 		if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((uint8_t *) fat) + i * disk->superblock.block_size) != 0) {
-			FFS_ERR(1, "FAT block write failed");
-			free(fat);
+			FFS_ERR(1, "FAT write failed");
+			free(fat_buffer);
 			return -1;
 		}
 	}
 	
-	free(fat);
-
+	free(fat_buffer);
 
 	// Setup root directory
 	time_t current_time = time(NULL);
@@ -208,40 +185,20 @@ ffs_disk ffs_disk_open(const char *path)
     // Disk file could not be opened
     if(!disk->file) {
 		free(disk);
-		FFS_ERR(1, "disk file is invalid");
+		FFS_ERR(1, "file failed to open");
         return NULL;
     }
 
-    // Block size needs to be known to read superblock
-    disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
-
-    // Need a buffer to store a block
-    struct ffs_superblock *superblock_buffer = malloc(FFS_DISK_BLOCK_SIZE);
-    if(!superblock_buffer) {
-		free(disk);
-		FFS_ERR(1, "superblock buffer allocation failed");
-        return NULL;
-    }
-
-    // Cache disk superblock
-    ffs_block_read(disk, FFS_BLOCK_SUPERBLOCK, superblock_buffer);
-    disk->superblock = *superblock_buffer;
-
-    free(superblock_buffer);
-    disk->superblock.block_size = FFS_DISK_BLOCK_SIZE;
+	// Read existing superblock on disk
+	if(fread(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file) != 1) {
+		FFS_ERR(1, "superblock read failed");
+		return NULL;
+	}
 
     return disk;
 }
 
 const struct ffs_superblock *ffs_disk_superblock(const ffs_disk disk)
 {
-	FFS_LOG(1, "disk=%p", disk);
-
-    // Disk must not be NULL
-    if(!disk) {
-		FFS_ERR(1, "specified disk invalid");
-        return NULL;
-    }
-
     return &disk->superblock;
 }
