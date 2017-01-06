@@ -15,7 +15,7 @@ struct ffs_disk_info {
 };
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_read(ffs_disk disk, block offset, void *buffer)
+int ffs_block_read(ffs_disk disk, ffs_block offset, void *buffer)
 {
 	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 
@@ -43,7 +43,7 @@ int ffs_block_read(ffs_disk disk, block offset, void *buffer)
 }
 
 // Must be defined here because ffs_disk is defined here
-int ffs_block_write(ffs_disk disk, block offset, const void *buffer)
+int ffs_block_write(ffs_disk disk, ffs_block offset, const void *buffer)
 {
 	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 
@@ -105,7 +105,7 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 	memset(buffer, 0, disk->superblock.block_size);
 
 	// Fill disk with zeros
-	for(block i = 0; i < disk->superblock.block_count; ++i) {
+	for(ffs_block i = 0; i < disk->superblock.block_count; ++i) {
 		ffs_block_write(disk, i, buffer);
 	}
 
@@ -117,13 +117,13 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 		return NULL;
 	}
 
-	block *fat_buffer = malloc(disk->superblock.block_count * sizeof(block));
+	ffs_block *fat_buffer = malloc(disk->superblock.block_count * sizeof(block));
     if(!fat_buffer) {
 		FFS_ERR(1, "FAT buffer allocation failed");
         return -1;
     }
 
-	for(block i = 0; i < disk->superblock.block_count; ++i) {
+	for(ffs_block i = 0; i < disk->superblock.block_count; ++i) {
 		if(i == disk->superblock.root_block) {
 			fat_buffer[i] = FFS_BLOCK_LAST;
 		} else if(i < disk->superblock.fat_block_count + 1) {

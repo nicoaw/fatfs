@@ -9,7 +9,7 @@
 #define FFS_DIR_DIRECTORY		 1
 #define FFS_DIR_FILE			 2
 
-#define FFS_DIR_ADDRESS_VALID(address) (FFS_BLOCK_VALID(address.block))
+#define FFS_DIR_ADDRESS_VALID(sb, address) (FFS_BLOCK_VALID(address.block) && address.offset < sb->block_size)
 
 // A FAT filesystem directory or file information
 struct __attribute__((__packed__)) ffs_directory {
@@ -48,7 +48,6 @@ ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path);
 int ffs_dir_read(ffs_disk disk, ffs_address offset, void *data, uint32_t size);
 
 // Get root address
-// Returns invalid address on failure
 ffs_address ffs_dir_root(ffs_disk disk);
 
 // Get address offset bytes from start
