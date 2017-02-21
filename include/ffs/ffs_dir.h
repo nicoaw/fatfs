@@ -23,7 +23,7 @@ struct __attribute__((__packed__)) ffs_directory {
     uint32_t unused;
 };
 
-// A pointer to data in a FAT filesystem directory
+// A pointer to FAT filesystem directory entry
 typedef struct {
 	uint32_t block;
 	uint32_t offset;
@@ -43,19 +43,17 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size);
 // Returns invalid address on failure
 ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path);
 
-// Read size bytes of data from offset
-// Returns non-zero on failure
-int ffs_dir_read(ffs_disk disk, ffs_address offset, void *data, uint32_t size);
+// Reads at most size bytes of data from offset
+// Space must be allocated to read
+// Returns count of bytes read
+uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size);
 
 // Get root address
 ffs_address ffs_dir_root(ffs_disk disk);
 
-// Get address offset bytes from start
-// Returns invalid address on failure
-ffs_address ffs_dir_seek(ffs_disk disk, ffs_address start, uint32_t offset);
-
-// Write size bytes of data to offset
-// Returns non-zero on failure
-int ffs_dir_write(ffs_disk disk, ffs_address offset, const void *data, uint32_t size);
+// Writes at most size bytes of data to offset
+// Space must be allocated to write
+// Returns count of bytes written
+uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size);
 
 #endif
