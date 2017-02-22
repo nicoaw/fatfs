@@ -42,18 +42,15 @@ int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size);
 // Returns non-zero on failure
 int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size);
 
-// Find directory entry address given relative path from root
+// Find directory entry address from absolute path
 // Returns invalid address on failure
-ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path);
+ffs_address ffs_dir_find(ffs_disk disk, const char *path);
 
 // Reads at most size bytes of data from offset
 // Space must be allocated to read
 // Reads to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
 // Returns count of bytes read
 uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size);
-
-// Get root address
-ffs_address ffs_dir_root(ffs_disk disk);
 
 // Writes at most size bytes of data to offset
 // Space must be allocated to write

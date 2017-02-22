@@ -8,19 +8,11 @@ extern const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 
 // Recursively find address in parent directory starting with name
 // Returns invalid address on failure
-ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address parent, const char *name);
-
-// Read directory entry
-// Returns non-zero on failure
-int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory);
+ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name);
 
 // Seek to offset in directory
 // Returns invalid address on failure
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset);
-
-// Write directory entry
-// Returns non-zero on failure
-int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, const struct ffs_directory *directory);
 
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 {
@@ -115,9 +107,9 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 	return 0;
 }
 
-ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path)
+ffs_address ffs_dir_find(ffs_disk disk, const char *path)
 {
-	FFS_LOG(1, "disk=%p root={block=%u offset=%u} path=%s", disk, root.block, root.offset, path);
+	FFS_LOG(1, "disk=%p path=%s", disk, path);
 
 	// Need mutable path for strtok
 	char *mutable_path = malloc((strlen(path) + 1) * sizeof(char));
@@ -125,13 +117,14 @@ ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path)
 
 	const char *name = strtok(mutable_path, "/");
 
+	ffs_address root = {ffs_disk_superblock(disk)->root_block, 0};
 	ffs_address result = ffs_dir_find_impl(disk, root, name);
 
 	free(mutable_path);
 	return result;
 }
 
-ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address parent, const char *name)
+ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name)
 {
 	FFS_LOG(1, "disk=%p parent=%p name=%s", disk, parent, name);
 
@@ -139,48 +132,47 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address parent, const char *nam
 
 	// Parent address is pointed to by path (ie. done searching)
 	if(!name) {
-		return parent;
+		return entry;
 	}
 
 	// Need parent directory to find directory with specified name
-	struct ffs_directory directory;
-	if(ffs_dir_read(disk, parent, &directory, sizeof(struct ffs_directory)) != 0) {
-		FFS_ERR(1, "parent directory read failed");
+	struct ffs_directory parent;
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+		FFS_ERR(1, "failed to read parent");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
-	uint32_t alloctated = directory.length % sb->block_size; // allocated space of start block
-	for(ffs_block b = directory.start_block; b != FFS_BLOCK_LAST; b = ffs_block_next(disk, b)) {
-		if(!FFS_BLOCK_VALID(b)) {
+	ffs_address address = {directory.start_block, 0};
+	uint32_t chunk_size = directory.length % sb->block_size;
+	for(; address.block != FFS_BLOCK_LAST; address.block = ffs_block_next(disk, address.block)) {
+		if!(FFS_BLOCK_VALID(address.block)) {
 			FFS_ERR(1, "failed to get next block");
 			return FFS_DIR_ADDRESS_INVALID;
 		}
 
 		// Check each child entry in block
-		for(uint32_t offset = 0; offset < allocated; offset += sizeof(struct ffs_directory)) {
-			ffs_address address = {b, offset};
-
+		for(; address.offset < chunk_size; address.offset + sizeof(struct ffs_directory)) {
 			struct ffs_directory child;
-			if(ffs_dir_read(disk, address, &child, sizeof(struct ffs_directory)) != 0) {
-				FFS_ERR(1, "child directory read failed");
+			if(ffs_dir_read(disk, address, FFS_DIR_ENTRY_OFFSET, &child, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+				FFS_ERR(1, "failed to read child");
 				return FFS_DIR_ADDRESS_INVALID;
 			}
 
-			// Found directory with specified name
 			if(strcmp(child.name, name) == 0) {
-				const char *child_name = strtok(NULL, "/");
-				return ffs_dir_find_impl(disk, address, child_name);
+				const char *next_name = strtok(NULL, "/");
+				return ffs_dir_find_impl(disk, address, next_name);
 			}
 		}
 
-		allocated = sb->block_size; // allocated space of next block
+		chunk_size = sb->block_size;
+		address.offset = 0;
 	}
 
-	FFS_ERR(1, "No address found");
+	FFS_ERR(1, "no address found");
 	return FFS_DIR_ADDRESS_INVALID;
 }
 
-uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size)
+uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} data=%p size=%u", disk, offset.block, offset.offset, data, size);
 
@@ -191,6 +183,8 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 		return 0;
 	}
 
+	void *buffer = malloc(sb->block_size);
+
 	// Read from entry instead
 	if(offset == FFS_DIR_ENTRY_OFFSET) {
 		if(size != sizeof(struct ffs_directory)) {
@@ -198,11 +192,15 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 			return 0;
 		}
 
-		if(ffs_dir_read_entry(disk, entry, data) != 0) {
-			FFS_ERR(1, "failed to read entry");
+		if(ffs_block_read(disk, entry.block, buffer) != 0) {
+			FFS_ERR(1, "failed to read entry block");
 			return 0;
 		}
 
+		// Copy directory entry
+		memcpy(data, buffer + entry.offset, size);
+
+		free(buffer);
 		return size;
 	}
 
@@ -210,10 +208,10 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 	ffs_address address = ffs_dir_seek(disk, entry, offset + size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
 		FFS_ERR(1, "seeked address invalid");
+		free(buffer);
 		return 0;
 	}
 
-	void *buffer = malloc(sb->block_size);
 	uint32_t read = 0;
 
 	// Read data chunk by chunk in reverse
@@ -246,45 +244,19 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 	return read;
 }
 
-int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory)
-{
-	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} directory=%p", disk, entry.block, entry.offset, directory);
-
-	// Read entry block
-	uint8_t *buffer = malloc(sb->block_size);
-	if(ffs_block_read(disk, entry.block, buffer) != 0) {
-		FFS_ERR(1, "failed to read entry");
-		return -1;
-	}
-
-	// Copy directory entry
-	memcpy(directory, buffer + entry.offset, sizeof(struct ffs_directory));
-
-	free(buffer);
-	return 0;
-}
-
-ffs_address ffs_dir_root(ffs_disk disk)
-{
-	ffs_address address = {ffs_disk_superblock(disk)->root_block, 0};
-	return address;
-}
-
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 {
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory entry
 	struct ffs_directory directory;
-	if(ffs_block_read_entry(disk, entry, &directory) != 0) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
 		FFS_ERR(1, "failed to read entry");
 		return -1;
 	}
 
 	ffs_address address = {directory.start_block, directory.length - offset};
 	uint32_t chunk_size = directory.length % sb->block_size;
-
-	free(buffer);
 
 	// Seek chunk by chunk
 	while(address.offset >= sb->block_size) {
@@ -312,6 +284,8 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 		return 0;
 	}
 
+	void *buffer = malloc(sb->block_size);
+
 	// Write to entry instead
 	if(offset == FFS_DIR_ENTRY_OFFSET) {
 		if(size != sizeof(struct ffs_directory)) {
@@ -319,11 +293,22 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 			return 0;
 		}
 
-		if(ffs_dir_write_entry(disk, entry, data) != 0) {
-			FFS_ERR(1, "failed to write entry");
-			return 0;
+		// Read entry block
+		if(ffs_block_read(disk, entry.block, buffer) != 0) {
+			FFS_ERR(1, "failed to read entry block");
+			return -1;
 		}
 
+		// Copy directory entry
+		memcpy(buffer, data, size);
+
+		// Write entry block
+		if(ffs_block_write(disk, entry.block, buffer) != 0) {
+			FFS_ERR(1, "failed to write entry block");
+			return -1;
+		}
+
+		free(buffer);
 		return size;
 	}
 
@@ -334,7 +319,6 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 		return 0;
 	}
 
-	void *buffer = malloc(sb->block_size);
 	uint32_t written = 0;
 
 	// Write data chunk by chunk in reverse
@@ -375,28 +359,4 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 
 	free(buffer);
 	return written;
-}
-
-int ffs_dir_write_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory)
-{
-	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} directory=%p", disk, entry.block, entry.offset, directory);
-
-	// Read entry block
-	uint8_t *buffer = malloc(sb->block_size);
-	if(ffs_block_read(disk, entry.block, buffer) != 0) {
-		FFS_ERR(1, "failed to read entry");
-		return -1;
-	}
-
-	// Copy directory entry
-	memcpy(buffer, directory, sizeof(struct ffs_directory));
-
-	// Write entry block
-	if(ffs_block_write(disk, entry.block, buffer) != 0) {
-		FFS_ERR(1, "failed to read entry");
-		return -1;
-	}
-
-	free(buffer);
-	return 0;
 }
