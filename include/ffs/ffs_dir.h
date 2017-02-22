@@ -9,6 +9,9 @@
 #define FFS_DIR_DIRECTORY		 1
 #define FFS_DIR_FILE			 2
 
+// Offset to access entry for read/write
+#define FFS_DIR_ENTRY_OFFSET	-1
+
 #define FFS_DIR_ADDRESS_VALID(sb, address) (FFS_BLOCK_VALID(address.block) && address.offset < sb->block_size)
 
 // A FAT filesystem directory or file information
@@ -45,6 +48,7 @@ ffs_address ffs_dir_find(ffs_disk disk, ffs_address root, const char *path);
 
 // Reads at most size bytes of data from offset
 // Space must be allocated to read
+// Reads to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
 // Returns count of bytes read
 uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size);
 
@@ -53,6 +57,7 @@ ffs_address ffs_dir_root(ffs_disk disk);
 
 // Writes at most size bytes of data to offset
 // Space must be allocated to write
+// Writes to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
 // Returns count of bytes written
 uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size);
 

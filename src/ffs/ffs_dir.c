@@ -10,9 +10,17 @@ extern const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 // Returns invalid address on failure
 ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address parent, const char *name);
 
+// Read directory entry
+// Returns non-zero on failure
+int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory);
+
 // Seek to offset in directory
 // Returns invalid address on failure
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset);
+
+// Write directory entry
+// Returns non-zero on failure
+int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, const struct ffs_directory *directory);
 
 ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 {
@@ -183,6 +191,21 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 		return 0;
 	}
 
+	// Read from entry instead
+	if(offset == FFS_DIR_ENTRY_OFFSET) {
+		if(size != sizeof(struct ffs_directory)) {
+			FFS_ERR(1, "invalid entry read size");
+			return 0;
+		}
+
+		if(ffs_dir_read_entry(disk, entry, data) != 0) {
+			FFS_ERR(1, "failed to read entry");
+			return 0;
+		}
+
+		return size;
+	}
+
 	// Seek to end of where data is going to be read
 	ffs_address address = ffs_dir_seek(disk, entry, offset + size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
@@ -223,6 +246,24 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, const v
 	return read;
 }
 
+int ffs_dir_read_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory)
+{
+	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} directory=%p", disk, entry.block, entry.offset, directory);
+
+	// Read entry block
+	uint8_t *buffer = malloc(sb->block_size);
+	if(ffs_block_read(disk, entry.block, buffer) != 0) {
+		FFS_ERR(1, "failed to read entry");
+		return -1;
+	}
+
+	// Copy directory entry
+	memcpy(directory, buffer + entry.offset, sizeof(struct ffs_directory));
+
+	free(buffer);
+	return 0;
+}
+
 ffs_address ffs_dir_root(ffs_disk disk)
 {
 	ffs_address address = {ffs_disk_superblock(disk)->root_block, 0};
@@ -233,14 +274,13 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 {
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
-	// Read entry block
-	uint8_t *buffer = malloc(sb->block_size);
-	if(ffs_block_read(disk, entry.block, buffer) != 0) {
+	// Read directory entry
+	struct ffs_directory directory;
+	if(ffs_block_read_entry(disk, entry, &directory) != 0) {
 		FFS_ERR(1, "failed to read entry");
 		return -1;
 	}
 
-	struct ffs_directory directory = *(buffer + entry.offset);
 	ffs_address address = {directory.start_block, directory.length - offset};
 	uint32_t chunk_size = directory.length % sb->block_size;
 
@@ -270,6 +310,21 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 	if(!FFS_DIR_ADDRESS_VALID(sb, entry)) {
 		FFS_ERR(1, "entry address invalid");
 		return 0;
+	}
+
+	// Write to entry instead
+	if(offset == FFS_DIR_ENTRY_OFFSET) {
+		if(size != sizeof(struct ffs_directory)) {
+			FFS_ERR(1, "invalid entry write size");
+			return 0;
+		}
+
+		if(ffs_dir_write_entry(disk, entry, data) != 0) {
+			FFS_ERR(1, "failed to write entry");
+			return 0;
+		}
+
+		return size;
 	}
 
 	// Seek to end of where data is going to be written
@@ -320,4 +375,28 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 
 	free(buffer);
 	return written;
+}
+
+int ffs_dir_write_entry(ffs_disk disk, ffs_address entry, struct ffs_directory *directory)
+{
+	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} directory=%p", disk, entry.block, entry.offset, directory);
+
+	// Read entry block
+	uint8_t *buffer = malloc(sb->block_size);
+	if(ffs_block_read(disk, entry.block, buffer) != 0) {
+		FFS_ERR(1, "failed to read entry");
+		return -1;
+	}
+
+	// Copy directory entry
+	memcpy(buffer, directory, sizeof(struct ffs_directory));
+
+	// Write entry block
+	if(ffs_block_write(disk, entry.block, buffer) != 0) {
+		FFS_ERR(1, "failed to read entry");
+		return -1;
+	}
+
+	free(buffer);
+	return 0;
 }
