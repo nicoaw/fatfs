@@ -20,7 +20,7 @@ struct __attribute__((__packed__)) ffs_directory {
     uint64_t create_time;
     uint64_t modify_time;
     uint64_t access_time;
-    uint32_t length;
+    uint32_t size;
     uint32_t start_block;
     uint32_t flags;
     uint32_t unused;

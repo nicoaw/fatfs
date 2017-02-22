@@ -143,7 +143,7 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 	}
 
 	ffs_address address = {directory.start_block, 0};
-	uint32_t chunk_size = directory.length % sb->block_size;
+	uint32_t chunk_size = directory.size % sb->block_size;
 	for(; address.block != FFS_BLOCK_LAST; address.block = ffs_block_next(disk, address.block)) {
 		if!(FFS_BLOCK_VALID(address.block)) {
 			FFS_ERR(1, "failed to get next block");
@@ -255,8 +255,8 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 		return -1;
 	}
 
-	ffs_address address = {directory.start_block, directory.length - offset};
-	uint32_t chunk_size = directory.length % sb->block_size;
+	ffs_address address = {directory.start_block, directory.size - offset};
+	uint32_t chunk_size = directory.size % sb->block_size;
 
 	// Seek chunk by chunk
 	while(address.offset >= sb->block_size) {
