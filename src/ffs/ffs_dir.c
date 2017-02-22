@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-extern const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
+const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 
 // Recursively find address in parent directory starting with name
 // Returns invalid address on failure
@@ -14,7 +14,7 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 // Returns invalid address on failure
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset);
 
-ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
+int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} size=%u", disk, entry.block, entry.offset, size);
 
@@ -22,7 +22,7 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Read directory to allocate space for
 	struct ffs_directory directory;
-	if(ffs_dir_read(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -49,12 +49,12 @@ ffs_address ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Write updated directory information
 	directory.size += size;
-	if(ffs_dir_write(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
 
-	return address;
+	return 0;
 }
 
 int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
@@ -65,7 +65,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Read directory to free space from
 	struct ffs_directory directory;
-	if(ffs_dir_read(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -99,7 +99,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 	
 	// Write updated directory information
 	directory.size -= size;
-	if(ffs_dir_write(disk, entry, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
@@ -126,7 +126,7 @@ ffs_address ffs_dir_find(ffs_disk disk, const char *path)
 
 ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name)
 {
-	FFS_LOG(1, "disk=%p parent=%p name=%s", disk, parent, name);
+	FFS_LOG(1, "disk=%p entry=%p name=%s", disk, entry, name);
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -137,15 +137,15 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 
 	// Need parent directory to find directory with specified name
 	struct ffs_directory parent;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &parent, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
 		FFS_ERR(1, "failed to read parent");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
-	ffs_address address = {directory.start_block, 0};
-	uint32_t chunk_size = directory.size % sb->block_size;
+	ffs_address address = {parent.start_block, 0};
+	uint32_t chunk_size = parent.size % sb->block_size;
 	for(; address.block != FFS_BLOCK_LAST; address.block = ffs_block_next(disk, address.block)) {
-		if!(FFS_BLOCK_VALID(address.block)) {
+		if(!FFS_BLOCK_VALID(address.block)) {
 			FFS_ERR(1, "failed to get next block");
 			return FFS_DIR_ADDRESS_INVALID;
 		}
@@ -174,7 +174,7 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 
 uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} data=%p size=%u", disk, offset.block, offset.offset, data, size);
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -252,7 +252,7 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 	struct ffs_directory directory;
 	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
 		FFS_ERR(1, "failed to read entry");
-		return -1;
+		return FFS_DIR_ADDRESS_INVALID;
 	}
 
 	ffs_address address = {directory.start_block, directory.size - offset};
@@ -275,7 +275,7 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 
 uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size)
 {
-	FFS_LOG(1, "disk=%p offset={block=%u offset=%u} data=%p size=%u", disk, offset.block, offset.offset, data, size);
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 

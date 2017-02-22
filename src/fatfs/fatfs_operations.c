@@ -1,4 +1,4 @@
-#include "ffs_ops.h"
+#include "fatfs_operations.h"
 #include <errno.h>
 #include <ffs/ffs_aux.h>
 #include <ffs/ffs_block.h>
@@ -11,6 +11,7 @@
 
 #define MOUNT_DISK ((ffs_disk) fuse_get_context()->private_data)
 
+/*
 struct path_info
 {
 	ffs_address root_address;
@@ -57,7 +58,7 @@ int get_path_info(const char *path, struct path_info *path_info)
 	return 0;
 }
 
-int ffs_create(const char *path, mode_t mode, struct fuse_file_info *file_info)
+int fatfs_create(const char *path, mode_t mode, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s, mode=%u, file_info=%p", path, mode, file_info);
 
@@ -68,7 +69,7 @@ int ffs_create(const char *path, mode_t mode, struct fuse_file_info *file_info)
 	return 0;
 }
 
-int ffs_getattr(const char *path, struct stat *stats)
+int fatfs_getattr(const char *path, struct stat *stats)
 {
 	FFS_LOG(2, "path=%s, stats=%p", path, stats);
 
@@ -104,7 +105,7 @@ int ffs_getattr(const char *path, struct stat *stats)
 	return 0;
 }
 
-int ffs_open(const char *path, struct fuse_file_info *file_info)
+int fatfs_open(const char *path, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s, file_info=%p", path, file_info);
 
@@ -119,7 +120,7 @@ int ffs_open(const char *path, struct fuse_file_info *file_info)
 	return 0;
 }
 
-int ffs_mkdir(const char *path, mode_t mode)
+int fatfs_mkdir(const char *path, mode_t mode)
 {
 	FFS_LOG(2, "path=%s, mode=%u", path, mode);
 
@@ -130,7 +131,7 @@ int ffs_mkdir(const char *path, mode_t mode)
 	return 0;
 }
 
-int ffs_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
+int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s, buffer=%p, size=%zu, offset=%zd, file_info=%p", path, buffer, size, offset, file_info);
 
@@ -170,7 +171,7 @@ int ffs_read(const char *path, char *buffer, size_t size, off_t offset, struct f
 	return size;
 }
 
-int ffs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *file_info)
+int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s, buffer=%p, filler=%p, offset=%zd, file_info=%p", path, buffer, filler, offset, file_info);
 
@@ -204,7 +205,7 @@ int ffs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t of
 	return 0;
 }
 
-int ffs_truncate(const char *path, off_t size)
+int fatfs_truncate(const char *path, off_t size)
 {
 	FFS_LOG(2, "path=%s size=%d", path, size);
 
@@ -242,7 +243,7 @@ int ffs_truncate(const char *path, off_t size)
 	return 0;
 }
 
-int ffs_unlink(const char *path)
+int fatfs_unlink(const char *path)
 {
 	FFS_LOG(2, "path=%s", path);
 
@@ -281,7 +282,7 @@ int ffs_unlink(const char *path)
 	return 0;
 }
 
-int ffs_utimens(const char *path, const struct timespec tv[2])
+int fatfs_utimens(const char *path, const struct timespec tv[2])
 {
 	struct path_info pi;
 	if(get_path_info(path, &pi) != 0) {
@@ -299,7 +300,7 @@ int ffs_utimens(const char *path, const struct timespec tv[2])
 	return 0;
 }
 
-int ffs_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
+int fatfs_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s, buffer=%p, size=%zu, offset=%zd, file_info=%p", path, buffer, size, offset, file_info);
 
@@ -414,3 +415,4 @@ char *split_path(char *path)
 	*dividor = '\0';
 	return dividor + 1;
 }
+*/

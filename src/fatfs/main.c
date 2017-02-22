@@ -1,8 +1,10 @@
 #define FUSE_USE_VERSION 26
 
-#include <ffs/ffs_disk.h>
+#include "fatfs_operations.h"
+#include <ffs/ffs.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 
 // Format a disk
 // Returns non-zero on failure
@@ -13,19 +15,21 @@ int format(int argc, char **argv);
 int mount(int argc, char **argv);
 
 // Print program usage
-void usage(char *program);
+void usage(const char *program);
 
 int main(int argc, char** argv)
 {
-	const char *command = argv[1];
-	if(strcmp(command, "format") == 0) {
-		return format(argc, argv);
-	} else if(strcmp(command, "mount") == 0) {
-		return mount(argc, argv);
-	} else {
-		usage(argv[0]);
-		return -1;
+	if(argc > 1) {
+		const char *command = argv[1];
+		if(strcmp(command, "format") == 0) {
+			return format(argc, argv);
+		} else if(strcmp(command, "mount") == 0) {
+			return mount(argc, argv);
+		}
 	}
+
+	usage(argv[0]);
+	return -1;
 }
 
 int format(int argc, char **argv)
@@ -39,9 +43,9 @@ int format(int argc, char **argv)
 
 	// Setup superblock
 	struct ffs_superblock sb = {
-		.magic = 0x2345beef;
-		.block_count = 512;
-		.block_size = 1024;
+		.magic = 0x2345beef,
+		.block_count = 512,
+		.block_size = 1024,
 	};
 
 	const uint32_t fat_size = sb.block_count / sizeof(ffs_block);
@@ -74,5 +78,5 @@ int mount(int argc, char **argv)
 
 void usage(const char *program)
 {
-	fprintf(stderr, "%s (format|mount) <disk> [OPTIONS]\n", program);
+	fprintf(stderr, "%s (format|mount) <disk> [OPTIONS...]\n", program);
 }

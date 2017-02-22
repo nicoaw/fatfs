@@ -88,7 +88,7 @@ int ffs_disk_close(ffs_disk disk)
 
 int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 {
-	FFS_LOG(1, "disk=%p block_count=%zd", disk, block_count);
+	FFS_LOG(1, "disk=%p sb={magic=%u block_count=%u fat_block_count=%u block_size=%u root_block=%u}", disk, sb.magic, sb.block_count, sb.block_size, sb.root_block);
 
 	/*
 	   const uint32_t fat_size = block_count * sizeof(uint32_t);
@@ -114,10 +114,10 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 	// Write superblock on disk
 	if(fwrite(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file) != 1) {
 		FFS_ERR(1, "superblock write failed");
-		return NULL;
+		return -1;
 	}
 
-	ffs_block *fat_buffer = malloc(disk->superblock.block_count * sizeof(block));
+	ffs_block *fat_buffer = malloc(disk->superblock.block_count * sizeof(ffs_block));
     if(!fat_buffer) {
 		FFS_ERR(1, "FAT buffer allocation failed");
         return -1;
@@ -135,7 +135,7 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 
 	// Write FAT block by block
 	for(uint32_t i = 0; i < disk->superblock.fat_block_count; ++i) {
-		if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((uint8_t *) fat) + i * disk->superblock.block_size) != 0) {
+		if(ffs_block_write(disk, FFS_BLOCK_FAT + i, ((uint8_t *) fat_buffer) + i * disk->superblock.block_size) != 0) {
 			FFS_ERR(1, "FAT write failed");
 			free(fat_buffer);
 			return -1;

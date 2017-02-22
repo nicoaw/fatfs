@@ -3,8 +3,8 @@
 #include <stdlib.h>
 
 #define FFS_BLOCK_FAT_ENTRY_COUNT(sb)	(sb->block_size / sizeof(ffs_block))
-#define FFS_BLOCK_FAT_BLOCK(sb, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(sb->block_size))
-#define FFS_BLOCK_FAT_ENTRY(sb, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(sb->block_size))
+#define FFS_BLOCK_FAT_BLOCK(sb, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(sb))
+#define FFS_BLOCK_FAT_ENTRY(sb, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(sb))
 
 ffs_block ffs_block_alloc(ffs_disk disk, ffs_block next)
 {
@@ -32,7 +32,7 @@ ffs_block ffs_block_alloc(ffs_disk disk, ffs_block next)
 		for(uint32_t j = 0; j < FFS_BLOCK_FAT_ENTRY_COUNT(sb); ++j) {
 			// Found free block
 			if(fat_buffer[j] == FFS_BLOCK_FREE) {
-				const ffs_block free = j + i * fat_block_entry_count;
+				const ffs_block allocated = j + i * FFS_BLOCK_FAT_ENTRY_COUNT(sb);
 				fat_buffer[j] = next;
 
 				// Write updated FAT
@@ -43,7 +43,7 @@ ffs_block ffs_block_alloc(ffs_disk disk, ffs_block next)
 				}
 
 				free(fat_buffer);
-				return block;
+				return allocated;
 			}
 		}
 	}
@@ -110,6 +110,6 @@ ffs_block ffs_block_next(ffs_disk disk, ffs_block previous)
 
 	// Get next block according to FAT
 	ffs_block next = fat_buffer[FFS_BLOCK_FAT_ENTRY(sb, previous)];
-	free(fat);
+	free(fat_buffer);
 	return next;
 }
