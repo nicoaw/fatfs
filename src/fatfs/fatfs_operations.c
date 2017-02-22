@@ -147,7 +147,7 @@ int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct
 		return -EIO;
 	}
 
-	const uint32_t last = min_ui32(pi.directory.length, offset + size);
+	const uint32_t last = ffs_min(pi.directory.length, offset + size);
 
 	// Out of range, can't read anything
 	if(offset < 0 || last == 0) {

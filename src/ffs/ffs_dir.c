@@ -216,7 +216,7 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 
 	// Read data chunk by chunk in reverse
 	while(read < size) {
-		const uint32_t chunk_size = min_ui32(sb->block_size - address.offset, size - read);
+		const uint32_t chunk_size = ffs_min(sb->block_size - address.offset, size - read);
 		const uint32_t data_offset = size - (read + chunk_size);
 		const uint32_t buffer_offset = sb->block_size - chunk_size;
 
@@ -323,7 +323,7 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 
 	// Write data chunk by chunk in reverse
 	while(written < size) {
-		const uint32_t chunk_size = min_ui32(sb->block_size - address.offset, size - written);
+		const uint32_t chunk_size = ffs_min(sb->block_size - address.offset, size - written);
 		const uint32_t data_offset = size - (written + chunk_size);
 		const uint32_t buffer_offset = sb->block_size - chunk_size;
 

@@ -31,10 +31,10 @@
 
 #include <stdint.h> 
 
-// Get largest of a and b
-uint32_t max_ui32(uint32_t a, uint32_t b);
+// Returns larger 32-bit unsigned integer of a and b
+uint32_t ffs_max(uint32_t a, uint32_t b);
 
-// Get smallest of a and b
-uint32_t min_ui32(uint32_t a, uint32_t b);
+// Returns smaller 32-bit unsigned integer of a and b
+uint32_t ffs_min(uint32_t a, uint32_t b);
 
 #endif

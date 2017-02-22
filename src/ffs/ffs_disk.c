@@ -190,10 +190,7 @@ ffs_disk ffs_disk_open(const char *path)
     }
 
 	// Read existing superblock on disk
-	if(fread(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file) != 1) {
-		FFS_ERR(1, "superblock read failed");
-		return NULL;
-	}
+	fread(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file);
 
     return disk;
 }
