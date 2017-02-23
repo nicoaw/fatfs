@@ -47,13 +47,13 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size);
 ffs_address ffs_dir_find(ffs_disk disk, const char *path);
 
 // Reads at most size bytes of data from offset
-// Space must be allocated to read
-// Reads to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
+// Stops reading at end of directory
+// Reads from entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
 // Returns count of bytes read
 uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size);
 
 // Writes at most size bytes of data to offset
-// Space must be allocated to write
+// Stops reading at end of directory
 // Writes to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
 // Returns count of bytes written
 uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size);

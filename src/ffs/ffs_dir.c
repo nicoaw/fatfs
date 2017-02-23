@@ -13,7 +13,7 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 // Seek to offset in directory
 // Stops at end of directory
 // Returns invalid address on failure
-ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset);
+ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset, uint32_t size);
 
 int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 {
@@ -206,7 +206,7 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 	}
 
 	// Seek to end of where data is going to be read
-	ffs_address address = ffs_dir_seek(disk, entry, offset + size);
+	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
 		FFS_ERR(1, "seeked address invalid");
 		free(buffer);
@@ -243,7 +243,7 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 	return read;
 }
 
-ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
+ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset, uint32_t size)
 {
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -260,7 +260,10 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
-	ffs_address address = {directory.start_block, directory.size - offset};
+	const uint32_t end = offset + size; // End offset of data access
+	const uint32_t roffset = directory.size - ffs_min(directory.size, end); // Start at reverse offset
+
+	ffs_address address = {directory.start_block, roffset};
 	uint32_t chunk_size = directory.size % sb->block_size;
 
 	// Seek chunk by chunk
@@ -319,7 +322,7 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 	}
 
 	// Seek to end of where data is going to be written
-	ffs_address address = ffs_dir_seek(disk, entry, offset + size);
+	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
 		FFS_ERR(1, "seeked address invalid");
 		return 0;
