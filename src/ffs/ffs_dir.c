@@ -11,6 +11,7 @@ const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name);
 
 // Seek to offset in directory
+// Stops at end of directory
 // Returns invalid address on failure
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset);
 
@@ -222,9 +223,8 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 
 		// Read block
 		if(ffs_block_read(disk, address.block, buffer) != 0) {
-			free(buffer);
 			FFS_ERR(1, "block read failed");
-			return read;
+			break;
 		}
 
 		// Copy appropriate data
@@ -234,9 +234,8 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 		address.offset = 0;
 		address.block = ffs_block_next(disk, address.block);
 		if(!FFS_BLOCK_VALID(address.block)) {
-			free(buffer);
 			FFS_ERR(1, "failed to get next block");
-			return read;
+			break;
 		}
 	}
 
@@ -255,11 +254,17 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 		return FFS_DIR_ADDRESS_INVALID;
 	}
 
+	// Offset out of range
+	if(offset >= directory.size) {
+		FFS_ERR(1, "offset out of range");
+		return FFS_DIR_ADDRESS_INVALID;
+	}
+
 	ffs_address address = {directory.start_block, directory.size - offset};
 	uint32_t chunk_size = directory.size % sb->block_size;
 
 	// Seek chunk by chunk
-	while(address.offset >= sb->block_size) {
+	while(address.offset >= chunk_size) {
 		address.offset -= chunk_size;
 		address.block = ffs_block_next(disk, address.block);
 		if(!FFS_BLOCK_VALID(address.block)) {
@@ -269,7 +274,8 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 
 		chunk_size = sb->block_size;
 	}
-
+	
+	address.offset = chunk_size - address.offset; // Flip offset since its the reverse offset
 	return address;
 }
 
@@ -331,9 +337,8 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 		// Optimization: Don't need to do this if we are reading the entire block
 		if(chunk_size < sb->block_size) {
 			if(ffs_block_read(disk, address.block, buffer) != 0) {
-				free(buffer);
 				FFS_ERR(1, "block read failed");
-				return written;
+				break;
 			}
 		}
 
@@ -343,17 +348,15 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 
 		// Write block
 		if(ffs_block_write(disk, address.block, buffer) != 0) {
-			free(buffer);
 			FFS_ERR(1, "block write failed");
-			return written;
+			break;
 		}
 
 		address.offset = 0;
 		address.block = ffs_block_next(disk, address.block);
 		if(!FFS_BLOCK_VALID(address.block)) {
-			free(buffer);
 			FFS_ERR(1, "failed to get next block");
-			return written;
+			break;
 		}
 	}
 
