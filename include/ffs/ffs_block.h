@@ -10,7 +10,7 @@
 #define FFS_BLOCK_SUPERBLOCK	 0
 #define FFS_BLOCK_FAT			 (FFS_BLOCK_SUPERBLOCK + 1)
 
-#define FFS_BLOCK_VALID(block) 	 (block != FFS_BLOCK_FREE || block != FFS_BLOCK_INVALID || block != FFS_BLOCK_LAST)
+#define FFS_BLOCK_VALID(block) 	 (block != FFS_BLOCK_INVALID && block != FFS_BLOCK_LAST)
 
 // A FAT filesystem block id
 typedef uint32_t ffs_block;

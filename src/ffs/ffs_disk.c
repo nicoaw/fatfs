@@ -194,9 +194,6 @@ ffs_disk ffs_disk_open(const char *path)
 	// Can't use block_read since block size size is unknown
 	fread(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file);
 
-	FFS_LOG(2, "magic=%u", disk->superblock.magic);
-	FFS_LOG(2, "root_block=%u", disk->superblock.root_block);
-
     return disk;
 }
 

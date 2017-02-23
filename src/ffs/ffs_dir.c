@@ -205,6 +205,12 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 		return size;
 	}
 
+	// Don't do anything
+	if(size == 0) {
+		free(buffer);
+		return 0;
+	}
+
 	// Seek to end of where data is going to be read
 	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
@@ -321,10 +327,17 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 		return size;
 	}
 
+	// Don't do anything
+	if(size == 0) {
+		free(buffer);
+		return 0;
+	}
+
 	// Seek to end of where data is going to be written
 	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
 	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
 		FFS_ERR(1, "seeked address invalid");
+		free(buffer);
 		return 0;
 	}
 
