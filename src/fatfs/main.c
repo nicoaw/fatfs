@@ -50,6 +50,7 @@ int format_command(int argc, char **argv)
 
 	const uint32_t fat_size = sb.block_count / sizeof(ffs_block);
 	sb.fat_block_count = 1 + ((fat_size - 1) / sb.block_size); // ceil(fat_size / block_size)
+	sb.root_block = sb.fat_block_count + 1;
 
 	// Format a new or existing disk
 	if(ffs_disk_format(disk, sb) != 0) {
@@ -71,6 +72,10 @@ int mount_command(int argc, char **argv)
 
 	// Implemented fuse operations
 	struct fuse_operations operations = {
+		.getattr = fatfs_getattr,
+		.open = fatfs_open,
+		.read = fatfs_read,
+		.readdir = fatfs_readdir,
 	};
 
 	// Start fuse with appropriate options

@@ -109,13 +109,14 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 		ffs_block_write(disk, i, buffer);
 	}
 
-	free(buffer);
-
 	// Write superblock on disk
-	if(fwrite(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file) != 1) {
+	memcpy(buffer, &disk->superblock, sizeof(struct ffs_superblock));
+	if(ffs_block_write(disk, FFS_BLOCK_SUPERBLOCK, buffer) != 0) {
 		FFS_ERR(1, "superblock write failed");
 		return -1;
 	}
+
+	free(buffer);
 
 	ffs_block *fat_buffer = malloc(disk->superblock.block_count * sizeof(ffs_block));
     if(!fat_buffer) {
@@ -190,7 +191,11 @@ ffs_disk ffs_disk_open(const char *path)
     }
 
 	// Read existing superblock on disk
+	// Can't use block_read since block size size is unknown
 	fread(&disk->superblock, sizeof(struct ffs_superblock), 1, disk->file);
+
+	FFS_LOG(2, "magic=%u", disk->superblock.magic);
+	FFS_LOG(2, "root_block=%u", disk->superblock.root_block);
 
     return disk;
 }
