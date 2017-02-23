@@ -21,8 +21,8 @@ int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory to allocate space for
-	struct ffs_directory directory;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
+	struct ffs_entry directory;
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -49,7 +49,7 @@ int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Write updated directory information
 	directory.size += size;
-	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
@@ -64,8 +64,8 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory to free space from
-	struct ffs_directory directory;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
+	struct ffs_entry directory;
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -99,7 +99,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 	
 	// Write updated directory information
 	directory.size -= size;
-	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
@@ -136,8 +136,8 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 	}
 
 	// Need parent directory to find directory with specified name
-	struct ffs_directory parent;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &parent, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+	struct ffs_entry parent;
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &parent, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "failed to read parent");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
@@ -151,9 +151,9 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 		}
 
 		// Check each child entry in block
-		for(; address.offset < chunk_size; address.offset + sizeof(struct ffs_directory)) {
-			struct ffs_directory child;
-			if(ffs_dir_read(disk, address, FFS_DIR_ENTRY_OFFSET, &child, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+		for(; address.offset < chunk_size; address.offset + sizeof(struct ffs_entry)) {
+			struct ffs_entry child;
+			if(ffs_dir_read(disk, address, FFS_DIR_ENTRY_OFFSET, &child, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 				FFS_ERR(1, "failed to read child");
 				return FFS_DIR_ADDRESS_INVALID;
 			}
@@ -187,7 +187,7 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 
 	// Read from entry instead
 	if(offset == FFS_DIR_ENTRY_OFFSET) {
-		if(size != sizeof(struct ffs_directory)) {
+		if(size != sizeof(struct ffs_entry)) {
 			FFS_ERR(1, "invalid entry read size");
 			return 0;
 		}
@@ -249,8 +249,8 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset)
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	// Read directory entry
-	struct ffs_directory directory;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+	struct ffs_entry directory;
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "failed to read entry");
 		return FFS_DIR_ADDRESS_INVALID;
 	}
@@ -288,7 +288,7 @@ uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const 
 
 	// Write to entry instead
 	if(offset == FFS_DIR_ENTRY_OFFSET) {
-		if(size != sizeof(struct ffs_directory)) {
+		if(size != sizeof(struct ffs_entry)) {
 			FFS_ERR(1, "invalid entry write size");
 			return 0;
 		}

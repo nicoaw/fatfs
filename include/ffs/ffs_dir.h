@@ -14,8 +14,8 @@
 
 #define FFS_DIR_ADDRESS_VALID(sb, address) (FFS_BLOCK_VALID(address.block) && address.offset < sb->block_size)
 
-// A FAT filesystem directory or file information
-struct __attribute__((__packed__)) ffs_directory {
+// A FAT filesystem directory entry
+struct __attribute__((__packed__)) ffs_entry {
     char name[FFS_DIR_NAME_LENGTH + 1];
     uint64_t create_time;
     uint64_t modify_time;

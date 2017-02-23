@@ -146,7 +146,7 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
 
 	// Setup root directory
 	time_t current_time = time(NULL);
-    struct ffs_directory directory = {
+    struct ffs_entry directory = {
 		.name = "/",
 		.create_time = current_time,
 		.modify_time = current_time,
@@ -158,7 +158,7 @@ int ffs_disk_format(ffs_disk disk, struct ffs_superblock sb)
     };
 
 	ffs_address root = ffs_dir_find(disk, "/");
-	if(ffs_dir_write(disk, root, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_directory)) != sizeof(struct ffs_directory)) {
+	if(ffs_dir_write(disk, root, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "failed to write root directory");
 		return -1;
 	}
