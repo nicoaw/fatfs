@@ -11,3 +11,5 @@ lib
 *.swp
 *.swo
 *.sh
+disk.fatfs
+mnt.fatfs

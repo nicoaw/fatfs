@@ -8,11 +8,11 @@
 
 // Format a disk
 // Returns non-zero on failure
-int format(int argc, char **argv);
+int format_command(int argc, char **argv);
 
 // Mount a disk
 // Returns non-zero on failure
-int mount(int argc, char **argv);
+int mount_command(int argc, char **argv);
 
 // Print program usage
 void usage(const char *program);
@@ -22,9 +22,9 @@ int main(int argc, char** argv)
 	if(argc > 1) {
 		const char *command = argv[1];
 		if(strcmp(command, "format") == 0) {
-			return format(argc, argv);
+			return format_command(argc, argv);
 		} else if(strcmp(command, "mount") == 0) {
-			return mount(argc, argv);
+			return mount_command(argc, argv);
 		}
 	}
 
@@ -32,7 +32,7 @@ int main(int argc, char** argv)
 	return -1;
 }
 
-int format(int argc, char **argv)
+int format_command(int argc, char **argv)
 {
 	const char *path = argv[argc - 1];
 	ffs_disk disk = ffs_disk_open(path);
@@ -60,10 +60,14 @@ int format(int argc, char **argv)
 	return 0;
 }
 
-int mount(int argc, char **argv)
+int mount_command(int argc, char **argv)
 {
 	const char *path = argv[2];
 	ffs_disk disk = ffs_disk_open(path);
+	if(!disk) {
+		FFS_ERR(3, "failed to open disk");
+		return -1;
+	}
 
 	// Implemented fuse operations
 	struct fuse_operations operations = {
@@ -71,7 +75,6 @@ int mount(int argc, char **argv)
 
 	// Start fuse with appropriate options
 	int status = fuse_main(argc - 2, argv + 2, &operations, disk);
-
 	ffs_disk_close(disk);
 	return status;
 }
