@@ -59,10 +59,20 @@ int fatfs_getattr(const char *path, struct stat *stats)
 	stats->st_uid = context->uid;
 	stats->st_gid = context->gid;
 	stats->st_blksize = sb->block_size;
-	stats->st_blocks = sb->block_count;
 	stats->st_atime = directory.entry.access_time;
 	stats->st_mtime = directory.entry.modify_time;
 	stats->st_ctime = directory.entry.modify_time;
+
+	// Count blocks allocated to file
+	ffs_block block = directory.entry.start_block;
+	while(block != FFS_BLOCK_LAST) {
+		++stats->st_blocks;
+		block = ffs_block_next(disk, block);
+		if(block == FFS_BLOCK_INVALID) {
+			FFS_ERR(2, "failed to get next block");
+			return -ENOENT;
+		}
+	}
 
 	if(directory.entry.flags & FFS_DIR_DIRECTORY) {
 		// Directory is a directory

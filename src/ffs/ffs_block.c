@@ -2,10 +2,6 @@
 #include <ffs/ffs_block.h>
 #include <stdlib.h>
 
-#define FFS_BLOCK_FAT_ENTRY_COUNT(sb)	(sb->block_size / sizeof(ffs_block))
-#define FFS_BLOCK_FAT_BLOCK(sb, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(sb))
-#define FFS_BLOCK_FAT_ENTRY(sb, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(sb))
-
 ffs_block ffs_block_alloc(ffs_disk disk, ffs_block next)
 {
 	FFS_LOG(0, "disk=%p next=%u", disk, next);

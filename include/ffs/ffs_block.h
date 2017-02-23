@@ -3,14 +3,21 @@
 
 #include "ffs_disk.h"
 
+// Block states
 #define FFS_BLOCK_FREE			 0
 #define FFS_BLOCK_INVALID		-1
 #define FFS_BLOCK_LAST			-2
 
+// Static block locations
 #define FFS_BLOCK_SUPERBLOCK	 0
 #define FFS_BLOCK_FAT			 (FFS_BLOCK_SUPERBLOCK + 1)
 
 #define FFS_BLOCK_VALID(block) 	 (block != FFS_BLOCK_INVALID && block != FFS_BLOCK_LAST)
+
+// FAT access helpers
+#define FFS_BLOCK_FAT_ENTRY_COUNT(sb)	(sb->block_size / sizeof(ffs_block))
+#define FFS_BLOCK_FAT_BLOCK(sb, block)	(FFS_BLOCK_FAT + block / FFS_BLOCK_FAT_ENTRY_COUNT(sb))
+#define FFS_BLOCK_FAT_ENTRY(sb, block)	(block % FFS_BLOCK_FAT_ENTRY_COUNT(sb))
 
 // A FAT filesystem block id
 typedef uint32_t ffs_block;
