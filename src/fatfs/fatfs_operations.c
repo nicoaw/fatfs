@@ -45,7 +45,7 @@ int fatfs_getattr(const char *path, struct stat *stats)
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
-	// Need to check if directory exists
+	// Need directory entry information
 	struct fatfs_directory directory;
 	if(fatfs_get_directory(disk, path, &directory) != 0) {
 		FFS_ERR(2, "failed to get directory");
@@ -158,6 +158,35 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 	// Fill directory entry information
 	for(uint32_t i = 0; i < directory.entry.size / sizeof(struct ffs_entry); ++i) {
 		filler(buffer, entries[i].name, NULL, 0);
+	}
+
+	return 0;
+}
+
+int fatfs_utimens(const char *path, const struct timespec tv[2])
+{
+	FFS_LOG(2, "path=%s tv=%p", path, tv);
+
+	struct fuse_context *context = fuse_get_context();
+	ffs_disk disk = context->private_data; // Currently mounted disk
+
+	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+
+	// Need directory entry information
+	struct fatfs_directory directory;
+	if(fatfs_get_directory(disk, path, &directory) != 0) {
+		FFS_ERR(2, "failed to get directory");
+		return -ENOENT;
+	}
+
+	// Update access an modify times
+	directory.entry.access_time = tv[0].tv_sec;
+	directory.entry.modify_time = tv[1].tv_sec;
+
+	// Write changes
+	if(ffs_dir_write(disk, directory.address, FFS_DIR_ENTRY_OFFSET, &directory.entry, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
+		FFS_ERR(2, "failed to write changes");
+		return -ENOENT;
 	}
 
 	return 0;

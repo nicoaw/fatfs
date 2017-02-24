@@ -76,6 +76,7 @@ int mount_command(int argc, char **argv)
 		.open = fatfs_open,
 		.read = fatfs_read,
 		.readdir = fatfs_readdir,
+		.utimens = fatfs_utimens,
 	};
 
 	// Start fuse with appropriate options
