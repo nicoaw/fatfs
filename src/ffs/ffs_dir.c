@@ -10,6 +10,12 @@ const ffs_address FFS_DIR_ADDRESS_INVALID = {FFS_BLOCK_INVALID, 0};
 // Returns invalid address on failure
 ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name);
 
+// Read or writes at most size bytes to offset
+// Stops at end of directory
+// Reads or writes to entry when offset is FFS_DIR_ENTRY_OFFSET, size should be size of entry
+// Returns count of bytes read or written
+uint32_t ffs_dir_readwrite(ffs_disk disk, ffs_address entry, uint32_t offset, void *readdata, const void *writedata, uint32_t size);
+
 // Seek to offset in directory
 // Stops at end of directory
 // Returns invalid address on failure
@@ -23,7 +29,7 @@ int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Read directory to allocate space for
 	struct ffs_entry directory;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -50,10 +56,12 @@ int ffs_dir_alloc(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Write updated directory information
 	directory.size += size;
-	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
+
+	FFS_LOG(3, "wrote updated directory");
 
 	return 0;
 }
@@ -66,7 +74,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 
 	// Read directory to free space from
 	struct ffs_entry directory;
-	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
+	if(ffs_dir_read(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "directory read failed");
 		return -1;
 	}
@@ -100,7 +108,7 @@ int ffs_dir_free(ffs_disk disk, ffs_address entry, uint32_t size)
 	
 	// Write updated directory information
 	directory.size -= size;
-	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != 0) {
+	if(ffs_dir_write(disk, entry, FFS_DIR_ENTRY_OFFSET, &directory, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 		FFS_ERR(1, "directory write failed");
 		return -1;
 	}
@@ -127,7 +135,7 @@ ffs_address ffs_dir_find(ffs_disk disk, const char *path)
 
 ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name)
 {
-	FFS_LOG(1, "disk=%p entry=%p name=%s", disk, entry, name);
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} name=%s", disk, entry.block, entry.offset, name);
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -147,17 +155,19 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 	uint32_t chunk_size = parent.size % sb->block_size;
 	for(; address.block != FFS_BLOCK_LAST; address.block = ffs_block_next(disk, address.block)) {
 		if(!FFS_BLOCK_VALID(address.block)) {
-			FFS_ERR(1, "failed to get next block");
+			FFS_ERR(1, "failed to get block");
 			return FFS_DIR_ADDRESS_INVALID;
 		}
 
 		// Check each child entry in block
-		for(; address.offset < chunk_size; address.offset + sizeof(struct ffs_entry)) {
+		for(; address.offset < chunk_size; address.offset += sizeof(struct ffs_entry)) {
 			struct ffs_entry child;
 			if(ffs_dir_read(disk, address, FFS_DIR_ENTRY_OFFSET, &child, sizeof(struct ffs_entry)) != sizeof(struct ffs_entry)) {
 				FFS_ERR(1, "failed to read child");
 				return FFS_DIR_ADDRESS_INVALID;
 			}
+
+			FFS_LOG(3, "name=%s create=%u", child.name, child.create_time);
 
 			if(strcmp(child.name, name) == 0) {
 				const char *next_name = strtok(NULL, "/");
@@ -176,30 +186,53 @@ ffs_address ffs_dir_find_impl(ffs_disk disk, ffs_address entry, const char *name
 uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *data, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
+	return ffs_dir_readwrite(disk, entry, offset, data, NULL, size);
+}
+
+uint32_t ffs_dir_readwrite(ffs_disk disk, ffs_address entry, uint32_t offset, void *readdata, const void *writedata, uint32_t size)
+{
+	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u readdata=%p writedata=%p size=%u", disk, entry.block, entry.offset, offset, readdata, writedata, size);
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
 	if(!FFS_DIR_ADDRESS_VALID(sb, entry)) {
-		FFS_ERR(1, "entry address invalid");
+		FFS_ERR(1, "invalid entry address");
 		return 0;
 	}
 
 	void *buffer = malloc(sb->block_size);
 
-	// Read from entry instead
+	// Read entry block
+	if(ffs_block_read(disk, entry.block, buffer) != 0) {
+		FFS_ERR(1, "failed to read entry block");
+		return -1;
+	}
+
+	// Get directory entry
+	struct ffs_entry *directory = buffer + entry.offset;
+
+	// Read/Write on entry instead
 	if(offset == FFS_DIR_ENTRY_OFFSET) {
 		if(size != sizeof(struct ffs_entry)) {
-			FFS_ERR(1, "invalid entry read size");
+			FFS_ERR(1, "invalid entry size");
 			return 0;
 		}
 
-		if(ffs_block_read(disk, entry.block, buffer) != 0) {
-			FFS_ERR(1, "failed to read entry block");
-			return 0;
+		if(readdata) {
+			// Get directory entry data
+			memcpy(readdata, directory, size);
 		}
 
-		// Copy directory entry
-		memcpy(data, buffer + entry.offset, size);
+		if(writedata) {
+			// Set directory entry data
+			memcpy(directory, writedata, size);
+
+			// Write entry block
+			if(ffs_block_write(disk, entry.block, buffer) != 0) {
+				FFS_ERR(1, "failed to write entry block");
+				return -1;
+			}
+		}
 
 		free(buffer);
 		return size;
@@ -211,42 +244,98 @@ uint32_t ffs_dir_read(ffs_disk disk, ffs_address entry, uint32_t offset, void *d
 		return 0;
 	}
 
-	// Seek to end of where data is going to be read
-	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
-	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
-		FFS_ERR(1, "seeked address invalid");
+	fprintf(stderr, "setup: entry={block=%u offset=%u} offset=%u size=%u\n", entry.block, entry.offset, offset, size);
+
+	const uint32_t end = offset + size;
+	const uint32_t roffset = directory->size - end; // Reverse offset
+
+	fprintf(stderr, "setup: end=%u roffset=%u\n", end, roffset);
+
+	// Can't read/write outside of directory
+	if(end > directory->size) {
+		FFS_ERR(1, "directory access out of range");
+		return 0;
+	}
+
+	ffs_block block = directory->start_block;
+	uint32_t chunk_size = directory->size % sb->block_size;
+	uint32_t seekpos = ffs_min(chunk_size, roffset);
+
+	fprintf(stderr, "setup: block=%u chunk_size=%u seekpos=%u\n", block, chunk_size, seekpos);
+
+	// Seek to reverse offset
+	while(seekpos < roffset) {
+		if(!FFS_BLOCK_VALID(block)) {
+			FFS_ERR(1, "failed to get block");
+			free(buffer);
+			return 0;
+		}
+
+		seekpos += ffs_min(chunk_size, roffset - seekpos);
+		block = ffs_block_next(disk, block);
+		chunk_size = sb->block_size;
+
+		fprintf(stderr, "seeking: block=%u chunk_size=%u seekpos=%u\n", block, chunk_size, seekpos);
+	}
+
+	// Seek position must be at reverse offset
+	if(seekpos != roffset) {
+		FFS_ERR(1, "failed to seek offset");
 		free(buffer);
 		return 0;
 	}
 
-	uint32_t read = 0;
+	uint32_t count = 0;
 
-	// Read data chunk by chunk in reverse
-	while(read < size) {
-		const uint32_t chunk_size = ffs_min(sb->block_size - address.offset, size - read);
-		const uint32_t data_offset = size - (read + chunk_size);
-		const uint32_t buffer_offset = sb->block_size - chunk_size;
+	fprintf(stderr, "setup: count=%u\n", count);
 
-		// Read block
-		if(ffs_block_read(disk, address.block, buffer) != 0) {
-			FFS_ERR(1, "block read failed");
+	// Read/write chunk by chunk in reverse
+	while(count < size) {
+		if(!FFS_BLOCK_VALID(block)) {
+			FFS_ERR(1, "failed to get block");
 			break;
 		}
 
-		// Copy appropriate data
-		memcpy((uint8_t *) data + data_offset, (uint8_t *) buffer + buffer_offset, chunk_size);
-		read += chunk_size;
+		const uint32_t data_size = ffs_min(chunk_size, end - seekpos);
+		const uint32_t data_offset = size - (count + data_size);
+		const uint32_t buffer_offset = seekpos % sb->block_size;
 
-		address.offset = 0;
-		address.block = ffs_block_next(disk, address.block);
-		if(!FFS_BLOCK_VALID(address.block)) {
-			FFS_ERR(1, "failed to get next block");
-			break;
+		fprintf(stderr, "reading/writing: data_size=%u data_offset=%u buffer_offset=%u\n", data_size, data_offset, buffer_offset);
+
+		// Only read data when needed
+		// Data is not needed when writing whole block
+		if(readdata || sb->block_size < data_size) {
+			if(ffs_block_read(disk, block, buffer) != 0) {
+				FFS_ERR(1, "failed to read block");
+				break;
+			}
 		}
+
+		if(readdata) {
+			// Get appropriate data
+			memcpy(readdata + data_offset, buffer + buffer_offset, data_size);
+		}
+
+		if(writedata) {
+			// Set appropriate data
+			memcpy(buffer + buffer_offset, writedata + data_offset, data_size);
+
+			if(ffs_block_write(disk, block, buffer) != 0) {
+				FFS_ERR(1, "failed to write block");
+				break;
+			}
+		}
+
+		count += data_size;
+		seekpos += data_size;
+		block = ffs_block_next(disk, block);
+		chunk_size = sb->block_size;
+
+		fprintf(stderr, "reading/writing: block=%u chunk_size=%u seekpos=%u count=%u\n", block, chunk_size, seekpos, count);
 	}
 
 	free(buffer);
-	return read;
+	return count;
 }
 
 ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset, uint32_t size)
@@ -291,91 +380,5 @@ ffs_address ffs_dir_seek(ffs_disk disk, ffs_address entry, uint32_t offset, uint
 uint32_t ffs_dir_write(ffs_disk disk, ffs_address entry, uint32_t offset, const void *data, uint32_t size)
 {
 	FFS_LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
-
-	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
-
-	if(!FFS_DIR_ADDRESS_VALID(sb, entry)) {
-		FFS_ERR(1, "entry address invalid");
-		return 0;
-	}
-
-	void *buffer = malloc(sb->block_size);
-
-	// Write to entry instead
-	if(offset == FFS_DIR_ENTRY_OFFSET) {
-		if(size != sizeof(struct ffs_entry)) {
-			FFS_ERR(1, "invalid entry write size");
-			return 0;
-		}
-
-		// Read entry block
-		if(ffs_block_read(disk, entry.block, buffer) != 0) {
-			FFS_ERR(1, "failed to read entry block");
-			return -1;
-		}
-
-		// Copy directory entry
-		memcpy(buffer, data, size);
-
-		// Write entry block
-		if(ffs_block_write(disk, entry.block, buffer) != 0) {
-			FFS_ERR(1, "failed to write entry block");
-			return -1;
-		}
-
-		free(buffer);
-		return size;
-	}
-
-	// Don't do anything
-	if(size == 0) {
-		free(buffer);
-		return 0;
-	}
-
-	// Seek to end of where data is going to be written
-	ffs_address address = ffs_dir_seek(disk, entry, offset, size);
-	if(!FFS_DIR_ADDRESS_VALID(sb, address)) {
-		FFS_ERR(1, "seeked address invalid");
-		free(buffer);
-		return 0;
-	}
-
-	uint32_t written = 0;
-
-	// Write data chunk by chunk in reverse
-	while(written < size) {
-		const uint32_t chunk_size = ffs_min(sb->block_size - address.offset, size - written);
-		const uint32_t data_offset = size - (written + chunk_size);
-		const uint32_t buffer_offset = sb->block_size - chunk_size;
-
-		// Read block to copy existing data
-		// Optimization: Don't need to do this if we are reading the entire block
-		if(chunk_size < sb->block_size) {
-			if(ffs_block_read(disk, address.block, buffer) != 0) {
-				FFS_ERR(1, "block read failed");
-				break;
-			}
-		}
-
-		// Copy appropriate data
-		memcpy((uint8_t *) buffer + buffer_offset, (uint8_t *) data + data_offset, chunk_size);
-		written += chunk_size;
-
-		// Write block
-		if(ffs_block_write(disk, address.block, buffer) != 0) {
-			FFS_ERR(1, "block write failed");
-			break;
-		}
-
-		address.offset = 0;
-		address.block = ffs_block_next(disk, address.block);
-		if(!FFS_BLOCK_VALID(address.block)) {
-			FFS_ERR(1, "failed to get next block");
-			break;
-		}
-	}
-
-	free(buffer);
-	return written;
+	return ffs_dir_readwrite(disk, entry, offset, NULL, data, size);
 }

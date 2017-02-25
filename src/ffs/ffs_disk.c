@@ -14,10 +14,22 @@ struct ffs_disk_info {
     struct ffs_superblock superblock;
 };
 
+// Read or write block entire contents of block
+// Offset must be valid
+// Buffer must be size of a block
+// Returns zero on success; otherwise, returns non-zero
+int ffs_block_readwrite(ffs_disk disk, ffs_block offset, void *readbuf, const void *writebuf);
+
 // Must be defined here because ffs_disk is defined here
 int ffs_block_read(ffs_disk disk, ffs_block offset, void *buffer)
 {
 	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
+	return ffs_block_readwrite(disk, offset, buffer, NULL);
+}
+
+int ffs_block_readwrite(ffs_disk disk, ffs_block offset, void *readbuf, const void *writebuf)
+{
+	FFS_LOG(0, "disk=%p offset=%u readbuf=%p writebuf=%p", disk, offset, readbuf, writebuf);
 
 	// Offset must be valid
 	if(!FFS_BLOCK_VALID(offset)) {
@@ -33,10 +45,20 @@ int ffs_block_read(ffs_disk disk, ffs_block offset, void *buffer)
 		return -1;
 	}
 
-	// Read entire block
-	if(fread(buffer, sb->block_size, 1, disk->file) != 1) {
-		FFS_ERR(0, "disk read failed");
-		return -1;
+	if(readbuf) {
+		// Read entire block
+		if(fread(readbuf, sb->block_size, 1, disk->file) != 1) {
+			FFS_ERR(0, "failed to read buffer");
+			return -1;
+		}
+	}
+
+	if(writebuf) {
+		// Write entire block
+		if(fwrite(writebuf, sb->block_size, 1, disk->file) != 1) {
+			FFS_ERR(0, "failed to write buffer");
+			return -1;
+		}
 	}
 
 	return 0;
@@ -46,29 +68,9 @@ int ffs_block_read(ffs_disk disk, ffs_block offset, void *buffer)
 int ffs_block_write(ffs_disk disk, ffs_block offset, const void *buffer)
 {
 	FFS_LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
-
-	// Offset must be valid
-	if(!FFS_BLOCK_VALID(offset)) {
-		FFS_ERR(0, "offset block invalid");
-		return -1;
-	}
-
-    const struct ffs_superblock *sb = ffs_disk_superblock(disk);
-
-	// Seek to block position
-	if(fseek(disk->file, offset * sb->block_size, SEEK_SET) != 0) {
-		FFS_ERR(0, "disk seek failed");
-		return -1;
-	}
-
-	// Write entire block
-	if(fwrite(buffer, sb->block_size, 1, disk->file) != 1) {
-		FFS_ERR(0, "disk write failed");
-		return -1;
-	}
-
-	return 0;
+	return ffs_block_readwrite(disk, offset, NULL, buffer);
 }
+
 
 int ffs_disk_close(ffs_disk disk)
 {
