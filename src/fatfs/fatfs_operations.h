@@ -5,13 +5,13 @@
 
 // FUSE callback functions
 
-int fatfs_create(const char *path, mode_t mode, struct fuse_file_info *file_info);
-
 int fatfs_getattr(const char *path, struct stat *stats);
 
-int fatfs_open(const char *path, struct fuse_file_info *file_info);
-
 int fatfs_mkdir(const char *path, mode_t mode);
+
+int fatfs_mknod(const char *path, mode_t mode, dev_t dev);
+
+int fatfs_open(const char *path, struct fuse_file_info *file_info);
 
 int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info);
 

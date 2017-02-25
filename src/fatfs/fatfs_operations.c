@@ -5,6 +5,9 @@
 #include <string.h>
 #include <time.h>
 
+// Get currently mounted disk from fuse context
+#define FATFS_DISK(context)	((ffs_disk) context->private_data)
+
 // A directory address and entry
 struct fatfs_directory
 {
@@ -16,6 +19,15 @@ struct fatfs_directory
 // Returns non-zero on failure
 int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory *directory);
 
+// Make new directory at path with flags
+// Returns non-zero on failure
+int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags);
+
+// Split path into base path and directory name
+// Path will be updated to base path
+// Returns directory name offset in path
+char *split_path(char *path);
+
 int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory *directory)
 {
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
@@ -23,7 +35,7 @@ int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory 
 	// Find directory address
 	directory->address = ffs_dir_find(disk, path);
 	if(!FFS_DIR_ADDRESS_VALID(sb, directory->address)) {
-		FFS_ERR(2, "failed to find address %u %u", directory->address.block, directory->address.offset);
+		FFS_ERR(2, "failed to find address");
 		return -1;
 	}
 
@@ -36,12 +48,66 @@ int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory 
 	return 0;
 }
 
+int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags)
+{
+	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+
+	char *basepath = calloc(strlen(path), sizeof(char)); // Need mutable path to split
+	strcpy(basepath, path);
+	const char *name = split_path(basepath);
+
+	FFS_LOG(2, "basepath: (%s) name: %s", basepath, name);
+
+	// Make sure name is not too long
+	if(strlen(name) > FFS_DIR_NAME_LENGTH) {
+		FFS_ERR(2, "name too long");
+		return -ENOENT;
+	}
+
+	// Need parent directory to allocate space for new directory
+	struct fatfs_directory parent;
+	if(fatfs_get_directory(disk, basepath, &parent) != 0) {
+		FFS_ERR(2, "failed to get parent directory");
+		return -ENOENT;
+	}
+
+	// Allocate space for new directory
+	if(ffs_dir_alloc(disk, parent.address, sizeof(struct ffs_entry)) != 0) {
+		FFS_ERR(2, "failed to allocate new directory");
+		return -ENOENT;
+	}
+
+	// Fill directory entry information
+	time_t t = time(NULL);
+	struct ffs_entry entry =
+	{
+    	.create_time = t,
+    	.modify_time = t,
+    	.access_time = t,
+    	.size = 0,
+    	.start_block = FFS_BLOCK_LAST,
+    	.flags = flags,
+    	.unused = 0,
+	};
+	strcpy(entry.name, name);
+
+	// Write new directory
+	if(ffs_dir_write(disk, parent.address, parent.entry.size, &entry, sizeof(entry)) != sizeof(entry)) {
+		FFS_ERR(2, "failed to write new directory");
+		return -ENOENT;
+	}
+	
+	FFS_LOG(3, "wrote new directory");
+
+	return 0;
+}
+
 int fatfs_getattr(const char *path, struct stat *stats)
 {
 	FFS_LOG(2, "path=%s stats=%p", path, stats);
 
 	struct fuse_context *context = fuse_get_context();
-	ffs_disk disk = context->private_data; // Currently mounted disk
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -88,12 +154,27 @@ int fatfs_getattr(const char *path, struct stat *stats)
 	return 0;
 }
 
+int fatfs_mkdir(const char *path, mode_t mode)
+{
+	FFS_LOG(2, "path=%s mode=%u", path, mode);
+
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
+	return fatfs_make_directory(disk, path, FFS_DIR_DIRECTORY);
+}
+
+int fatfs_mknod(const char *path, mode_t mode, dev_t dev)
+{
+	FFS_LOG(2, "path=%s mode=%u dev=%u", path, mode, dev);
+
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
+	return fatfs_make_directory(disk, path, FFS_DIR_FILE);
+}
+
 int fatfs_open(const char *path, struct fuse_file_info *file_info)
 {
 	FFS_LOG(2, "path=%s file_info=%p", path, file_info);
 
-	struct fuse_context *context = fuse_get_context();
-	ffs_disk disk = context->private_data; // Currently mounted disk
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
 
 	// Need to check if directory exists
 	struct fatfs_directory directory;
@@ -108,8 +189,7 @@ int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct
 {
 	FFS_LOG(2, "path=%s, buffer=%p, size=%zu, offset=%zd, file_info=%p", path, buffer, size, offset, file_info);
 
-	struct fuse_context *context = fuse_get_context();
-	ffs_disk disk = context->private_data; // Currently mounted disk
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -134,8 +214,7 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 {
 	FFS_LOG(2, "path=%s, buffer=%p, filler=%p, offset=%zd, file_info=%p", path, buffer, filler, offset, file_info);
 
-	struct fuse_context *context = fuse_get_context();
-	ffs_disk disk = context->private_data; // Currently mounted disk
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
 
 	// Fill automatically created links
 	filler(buffer, ".", NULL, 0);
@@ -167,8 +246,7 @@ int fatfs_utimens(const char *path, const struct timespec tv[2])
 {
 	FFS_LOG(2, "path=%s tv=%p", path, tv);
 
-	struct fuse_context *context = fuse_get_context();
-	ffs_disk disk = context->private_data; // Currently mounted disk
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
 
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -190,4 +268,12 @@ int fatfs_utimens(const char *path, const struct timespec tv[2])
 	}
 
 	return 0;
+}
+
+char *split_path(char *path)
+{
+	char *dividor = strrchr(path, '/');
+
+	*dividor = '\0';
+	return dividor + 1;
 }
