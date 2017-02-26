@@ -19,6 +19,10 @@ struct fatfs_directory
 // Returns non-zero on failure
 int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory *directory);
 
+// Remove directory at path
+// Returns non-zero on failure
+int fatfs_remove_directory(ffs_disk disk, const char *path);
+
 // Make new directory at path with flags
 // Returns non-zero on failure
 int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags);
@@ -48,7 +52,7 @@ int fatfs_get_directory(ffs_disk disk, const char *path, struct fatfs_directory 
 	return 0;
 }
 
-int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags)
+int fatfs_remove_directory(ffs_disk disk, const char *path)
 {
 	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
 
@@ -56,7 +60,58 @@ int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags)
 	strcpy(basepath, path);
 	const char *name = split_path(basepath);
 
-	FFS_LOG(2, "basepath: (%s) name: %s", basepath, name);
+	// Need parent directory to free space from unlinked directory
+	struct fatfs_directory parent;
+	if(fatfs_get_directory(disk, basepath, &parent) != 0) {
+		FFS_ERR(2, "failed to get parent directory");
+		return -ENOENT;
+	}
+
+	// Read parent directory entries
+	struct ffs_entry *entries = malloc(parent.entry.size);
+	if(ffs_dir_read(disk, parent.address, 0, entries, parent.entry.size) != parent.entry.size) {
+		FFS_ERR(2, "failed to read parent directory");
+		free(entries);
+		return -ENOENT;
+	}
+
+	// Count of directories in parent
+	const uint32_t entry_count = parent.entry.size / sizeof(struct ffs_entry);
+
+	for(uint32_t i = 0; i < entry_count; ++i) {
+		// Found directory to delete
+		if(strcmp(entries[i].name, name) == 0) {
+			// Move last entry to deleted entry
+			memcpy(entries + i, entries + (entry_count - 1), sizeof(struct ffs_entry));
+			break;
+		}
+	}
+	
+	// Write modified parent directory entries
+	if(ffs_dir_write(disk, parent.address, 0, entries, parent.entry.size) != parent.entry.size) {
+		FFS_ERR(2, "failed to read parent directory");
+		free(entries);
+		return -ENOENT;
+	}
+
+	// Free last entry space
+	if(ffs_dir_free(disk, parent.address, sizeof(struct ffs_entry)) != 0) {
+		FFS_ERR(2, "failed to free last entry space");
+		free(entries);
+		return -ENOENT;
+	}
+	
+	free(entries);
+	return 0;
+}
+
+int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags)
+{
+	const struct ffs_superblock *sb = ffs_disk_superblock(disk);
+
+	char *basepath = calloc(strlen(path), sizeof(char)); // Need mutable path to split
+	strcpy(basepath, path);
+	const char *name = split_path(basepath);
 
 	// Make sure name is not too long
 	if(strlen(name) > FFS_DIR_NAME_LENGTH) {
@@ -97,8 +152,6 @@ int fatfs_make_directory(ffs_disk disk, const char *path, uint32_t flags)
 		return -ENOENT;
 	}
 	
-	FFS_LOG(3, "wrote new directory");
-
 	return 0;
 }
 
@@ -231,6 +284,7 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 	struct ffs_entry *entries = malloc(directory.entry.size);
 	if(ffs_dir_read(disk, directory.address, 0, entries, directory.entry.size) != directory.entry.size) {
 		FFS_ERR(2, "failed to read parent directory entries");
+		free(entries);
 		return -ENOENT;
 	}
 
@@ -239,7 +293,24 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 		filler(buffer, entries[i].name, NULL, 0);
 	}
 
+	free(entries);
 	return 0;
+}
+
+int fatfs_rmdir(const char *path)
+{
+	FFS_LOG(2, "path=%s", path);
+
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
+	return fatfs_remove_directory(disk, path);
+}
+
+int fatfs_unlink(const char *path)
+{
+	FFS_LOG(2, "path=%s", path);
+
+	ffs_disk disk = FATFS_DISK(fuse_get_context());
+	return fatfs_remove_directory(disk, path);
 }
 
 int fatfs_utimens(const char *path, const struct timespec tv[2])
