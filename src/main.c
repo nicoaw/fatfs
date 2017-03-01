@@ -1,7 +1,9 @@
 #define FUSE_USE_VERSION 26
 
-#include "fatfs_operations.h"
-#include <ffs/ffs.h>
+#include "aux.h"
+#include "block.h"
+#include "disk.h"
+#include "ops.h"
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,38 +37,38 @@ int main(int argc, char** argv)
 int format_command(int argc, char **argv)
 {
 	const char *path = argv[argc - 1];
-	ffs_disk disk = ffs_disk_open(path);
+	disk disk = disk_open(path);
 
 	if(!disk) {
 		return -1;
 	}
 
 	// Setup superblock
-	struct ffs_superblock sb = {
+	struct superblock sb = {
 		.magic = 0x2345beef,
 		.block_count = 512,
 		.block_size = 1024,
 	};
 
-	const uint32_t fat_size = sb.block_count / sizeof(ffs_block);
+	const uint32_t fat_size = sb.block_count / sizeof(block);
 	sb.fat_block_count = 1 + ((fat_size - 1) / sb.block_size); // ceil(fat_size / block_size)
 	sb.root_block = sb.fat_block_count + 1;
 
 	// Format a new or existing disk
-	if(ffs_disk_format(disk, sb) != 0) {
+	if(disk_format(disk, sb) != 0) {
 		return -1;
 	} 
 
-	ffs_disk_close(disk);
+	disk_close(disk);
 	return 0;
 }
 
 int mount_command(int argc, char **argv)
 {
 	const char *path = argv[2];
-	ffs_disk disk = ffs_disk_open(path);
+	disk disk = disk_open(path);
 	if(!disk) {
-		FFS_ERR(3, "failed to open disk");
+		ERR(3, "failed to open disk");
 		return -1;
 	}
 
@@ -85,7 +87,7 @@ int mount_command(int argc, char **argv)
 
 	// Start fuse with appropriate options
 	int status = fuse_main(argc - 2, argv + 2, &operations, disk);
-	ffs_disk_close(disk);
+	disk_close(disk);
 	return status;
 }
 

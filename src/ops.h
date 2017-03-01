@@ -1,5 +1,5 @@
-#ifndef FATFS_OPERATIONS_H
-#define FATFS_OPERATIONS_H
+#ifndef OPS_H
+#define OPS_H
 
 #include <fuse/fuse.h>
 
