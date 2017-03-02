@@ -1,6 +1,5 @@
 #define FUSE_USE_VERSION 26
 
-#include "aux.h"
 #include "block.h"
 #include "disk.h"
 #include "ops.h"

@@ -1,5 +1,4 @@
 #include "ops.h"
-#include "aux.h"
 #include "block.h"
 #include "dir.h"
 #include "disk.h"
