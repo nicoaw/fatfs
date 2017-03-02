@@ -1,8 +1,8 @@
-#include "aux.h"
 #include "block.h"
 #include "dir.h"
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 const address DIR_ADDRESS_INVALID = {BLOCK_INVALID, 0};
 
@@ -18,14 +18,18 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 
 int dir_alloc(disk disk, address entry, uint32_t size)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} size=%u", disk, entry.block, entry.offset, size);
+	syslog(LOG_DEBUG, "allocating %u bytes for entry %u:%u", size, entry.block, entry.offset);
 
 	const struct superblock *sb = disk_superblock(disk);
+
+	if(!DIR_ADDRESS_VALID(sb, entry)) {
+		syslog(LOG_ERR, "invalid entry %u:%u", entry.block, entry.offset);
+		return 0;
+	}
 
 	// Read directory to allocate space for
 	struct entry directory;
 	if(dir_read(disk, entry, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to read directory");
 		return -1;
 	}
 
@@ -42,7 +46,6 @@ int dir_alloc(disk disk, address entry, uint32_t size)
 		directory.start_block = block_alloc(disk, directory.start_block);
 		if(!BLOCK_VALID(directory.start_block)) {
 			// TODO: already allocated blocks are lost because the directory is not updated
-			ERR(1, "failed to allocate block");
 			return -1;
 		}
 
@@ -52,29 +55,33 @@ int dir_alloc(disk disk, address entry, uint32_t size)
 	// Write updated directory information
 	directory.size += size;
 	if(dir_write(disk, entry, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to write directory");
 		return -1;
 	}
 
+	syslog(LOG_DEBUG, "allocated %u bytes for entry %u:%u", size, entry.block, entry.offset);
 	return 0;
 }
 
 int dir_free(disk disk, address entry, uint32_t size)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} size=%u", disk, entry.block, entry.offset, size);
+	syslog(LOG_DEBUG, "freeing %u bytes for entry %u:%u", size, entry.block, entry.offset);
 
 	const struct superblock *sb = disk_superblock(disk);
+
+	if(!DIR_ADDRESS_VALID(sb, entry)) {
+		syslog(LOG_ERR, "invalid entry %u:%u", entry.block, entry.offset);
+		return 0;
+	}
 
 	// Read directory to free space from
 	struct entry directory;
 	if(dir_read(disk, entry, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to read directory");
 		return -1;
 	}
 
 	// Cannot free more space then the directory currently has allocated
 	if(size > directory.size) {
-		ERR(1, "invalid free range");
+		syslog(LOG_ERR, "cannot free %u bytes for entry of %u bytes", size, directory.size);
 		return -1;
 	}
 
@@ -83,15 +90,14 @@ int dir_free(disk disk, address entry, uint32_t size)
 	uint32_t freed = allocated;
 
 	while(freed <= size) {
-		// Get next block before freeing the head
-		block next = block_next(disk, directory.start_block);
-		if(next != BLOCK_LAST && !BLOCK_VALID(next)) {
-			ERR(1, "failed to get next block");
+		if(!BLOCK_VALID(directory.start_block)) {
 			return -1;
 		}
 
+		// Get next block before freeing the head
+		block next = block_next(disk, directory.start_block);
+
 		if(block_free(disk, directory.start_block) != 0) {
-			ERR(1, "failed to free block");
 			return -1;
 		}
 
@@ -102,16 +108,18 @@ int dir_free(disk disk, address entry, uint32_t size)
 	// Write updated directory information
 	directory.size -= size;
 	if(dir_write(disk, entry, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to write directory");
 		return -1;
 	}
 
+	syslog(LOG_DEBUG, "freed %u bytes for entry %u:%u", size, entry.block, entry.offset);
 	return 0;
 }
 
 address dir_find(disk disk, const char *path)
 {
-	LOG(1, "disk=%p path=%s", disk, path);
+	syslog(LOG_DEBUG, "finding entry for '%s'", path);
+
+	const struct superblock *sb = disk_superblock(disk);
 
 	// Need mutable path for strtok
 	char *mutable_path = malloc((strlen(path) + 1) * sizeof(char));
@@ -123,13 +131,17 @@ address dir_find(disk disk, const char *path)
 	address result = dir_find_impl(disk, root, name);
 
 	free(mutable_path);
+
+	if(DIR_ADDRESS_VALID(sb, result)) {
+		syslog(LOG_DEBUG, "found entry %u:%u for '%s'", result.block, result.offset, path);
+	} else {
+		syslog(LOG_ERR, "no entry found for '%s'", path);
+	}
 	return result;
 }
 
 address dir_find_impl(disk disk, address entry, const char *name)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} name=%s", disk, entry.block, entry.offset, name);
-
 	const struct superblock *sb = disk_superblock(disk);
 
 	// Parent address is pointed to by path (ie. done searching)
@@ -140,15 +152,18 @@ address dir_find_impl(disk disk, address entry, const char *name)
 	// Need parent directory to find directory with specified name
 	struct entry parent;
 	if(dir_read(disk, entry, DIR_ENTRY_OFFSET, &parent, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to read parent");
+		return DIR_ADDRESS_INVALID;
+	}
+
+	// Needed to avoid integer underflow when calculating chunk size
+	if(parent.size == 0) {
 		return DIR_ADDRESS_INVALID;
 	}
 
 	address address = {parent.start_block, 0};
-	uint32_t chunk_size = parent.size % sb->block_size;
+	uint32_t chunk_size = (parent.size - 1) % sb->block_size;
 	for(; address.block != BLOCK_LAST; address.block = block_next(disk, address.block)) {
 		if(!BLOCK_VALID(address.block)) {
-			ERR(1, "failed to get block");
 			return DIR_ADDRESS_INVALID;
 		}
 
@@ -156,7 +171,6 @@ address dir_find_impl(disk disk, address entry, const char *name)
 		for(; address.offset < chunk_size; address.offset += sizeof(struct entry)) {
 			struct entry child;
 			if(dir_read(disk, address, DIR_ENTRY_OFFSET, &child, sizeof(struct entry)) != sizeof(struct entry)) {
-				ERR(1, "failed to read child");
 				return DIR_ADDRESS_INVALID;
 			}
 
@@ -170,24 +184,27 @@ address dir_find_impl(disk disk, address entry, const char *name)
 		address.offset = 0;
 	}
 
-	ERR(1, "no address found");
 	return DIR_ADDRESS_INVALID;
 }
 
 uint32_t dir_read(disk disk, address entry, uint32_t offset, void *data, uint32_t size)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
 	return dir_readwrite(disk, entry, offset, data, NULL, size);
 }
 
 uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata, const void *writedata, uint32_t size)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u readdata=%p writedata=%p size=%u", disk, entry.block, entry.offset, offset, readdata, writedata, size);
+	if(offset == DIR_ENTRY_OFFSET) {
+		syslog(LOG_DEBUG, "%s%s%s entry %u:%u", readdata ? "reading" : "", (readdata && writedata) ? "/" : "", writedata ? "writing" : "", entry.block, entry.offset);
+	} else {
+		syslog(LOG_DEBUG, "%s%s%s %u bytes at offset %u for entry %u:%u",
+				readdata ? "reading" : "", (readdata && writedata) ? "/" : "", writedata ? "writing" : "", size, offset, entry.block, entry.offset);
+	}
 
 	const struct superblock *sb = disk_superblock(disk);
 
 	if(!DIR_ADDRESS_VALID(sb, entry)) {
-		ERR(1, "invalid entry address");
+		syslog(LOG_ERR, "invalid entry %u:%u", entry.block, entry.offset);
 		return 0;
 	}
 
@@ -195,7 +212,6 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 
 	// Read entry block
 	if(block_read(disk, entry.block, buffer) != 0) {
-		ERR(1, "failed to read entry block");
 		return -1;
 	}
 
@@ -205,7 +221,7 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 	// Read/Write on entry instead
 	if(offset == DIR_ENTRY_OFFSET) {
 		if(size != sizeof(struct entry)) {
-			ERR(1, "invalid entry size");
+			syslog(LOG_ERR, "invalid entry size %u", size);
 			return 0;
 		}
 
@@ -220,29 +236,32 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 
 			// Write entry block
 			if(block_write(disk, entry.block, buffer) != 0) {
-				ERR(1, "failed to write entry block");
 				return -1;
 			}
 		}
 
 		free(buffer);
+		syslog(LOG_DEBUG, "%s%s%s entry %u:%u", readdata ? "read" : "", (readdata && writedata) ? "/" : "", writedata ? "wrote" : "", entry.block, entry.offset);
 		return size;
 	}
 
 	// Don't do anything
-	if(size == 0) {
+	// Needed to avoid integer underflow when calculating blocks and end
+	if(size == 0 || directory->size == 0) {
 		free(buffer);
 		return 0;
 	}
 
-	const uint32_t blocks = directory->size / sb->block_size;
-	const uint32_t end = offset + size;
-
 	// Can't read/write outside of directory
-	if(end > directory->size) {
-		ERR(1, "directory access out of range");
+	if(offset >= directory->size) {
+		syslog(LOG_ERR, "offset %u out of range of entry size %u", offset, size);
 		return 0;
 	}
+
+	const uint32_t blocks = (directory->size - 1) / sb->block_size;
+	const uint32_t end = offset + size - 1;
+
+	syslog(LOG_DEBUG, "blocks=%u end=%u", blocks, end);
 
 	// Access boundaries
 	const uint32_t first_index = blocks - end / sb->block_size;
@@ -255,22 +274,23 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 
 	for(uint32_t i = 0; i <= last_index; ++i) {
 		if(!BLOCK_VALID(block)) {
-			ERR(1, "failed to get block");
-			free(buffer);
-			return 0;
+			break;
 		}
+
+		syslog(LOG_DEBUG, "first_index=%u first_offset=%u last_index=%u last_offset=%u", first_index, first_offset, last_index, last_offset);
 
 		// In access boundary
 		if(i >= first_index) {
 			const uint32_t buffer_offset = i == last_index ? last_offset : 0;
-			const uint32_t data_size = first_offset - buffer_offset;
+			const uint32_t data_size = first_offset - buffer_offset + 1;
 			const uint32_t data_offset = size - (count + data_size);
+
+			syslog(LOG_DEBUG, "buffer_offset=%u data_size=%u data_offset=%u", buffer_offset, data_size, data_offset);
 
 			// Only read data when needed
 			// Data is not needed when writing whole block
 			if(readdata || data_size < sb->block_size) {
 				if(block_read(disk, block, buffer) != 0) {
-					ERR(1, "failed to read block");
 					break;
 				}
 			}
@@ -285,12 +305,11 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 				memcpy(buffer + buffer_offset, writedata + data_offset, data_size);
 
 				if(block_write(disk, block, buffer) != 0) {
-					ERR(1, "failed to write block");
 					break;
 				}
 			}
 
-			first_offset = sb->block_size;
+			first_offset = sb->block_size - 1;
 			count += data_size;
 		}
 
@@ -298,11 +317,12 @@ uint32_t dir_readwrite(disk disk, address entry, uint32_t offset, void *readdata
 	}
 
 	free(buffer);
+	syslog(count == size ? LOG_DEBUG : LOG_ERR, "%s%s%s %u bytes at offset %u for entry %u:%u",
+			readdata ? "read" : "", (readdata && writedata) ? "/" : "", writedata ? "wrote" : "", count, offset, entry.block, entry.offset);
 	return count;
 }
 
 uint32_t dir_write(disk disk, address entry, uint32_t offset, const void *data, uint32_t size)
 {
-	LOG(1, "disk=%p entry={block=%u offset=%u} offset=%u data=%p size=%u", disk, entry.block, entry.offset, offset, data, size);
 	return dir_readwrite(disk, entry, offset, NULL, data, size);
 }

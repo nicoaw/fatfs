@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+#include <syslog.h>
 
 // Format a disk
 // Returns non-zero on failure
@@ -21,13 +22,21 @@ void usage(const char *program);
 
 int main(int argc, char** argv)
 {
+	setlogmask(LOG_UPTO(LOG_INFO));
+	openlog("fatfs", LOG_CONS | LOG_PID, LOG_USER);
+
 	if(argc > 1) {
 		const char *command = argv[1];
+		int result;
+
 		if(strcmp(command, "format") == 0) {
-			return format_command(argc, argv);
+			result = format_command(argc, argv);
 		} else if(strcmp(command, "mount") == 0) {
-			return mount_command(argc, argv);
+			result = mount_command(argc, argv);
 		}
+
+		closelog();
+		return result;
 	}
 
 	usage(argv[0]);
@@ -46,7 +55,7 @@ int format_command(int argc, char **argv)
 	// Setup superblock
 	struct superblock sb = {
 		.magic = 0x2345beef,
-		.block_count = 512,
+		.block_count = 33,
 		.block_size = 1024,
 	};
 
@@ -68,7 +77,6 @@ int mount_command(int argc, char **argv)
 	const char *path = argv[2];
 	disk disk = disk_open(path);
 	if(!disk) {
-		ERR(3, "failed to open disk");
 		return -1;
 	}
 

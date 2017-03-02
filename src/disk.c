@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <syslog.h>
 
 #define DISK_BLOCK_SIZE	1024
 
@@ -23,17 +24,16 @@ int block_readwrite(disk disk, block offset, void *readbuf, const void *writebuf
 // Must be defined here because disk is defined here
 int block_read(disk disk, block offset, void *buffer)
 {
-	LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 	return block_readwrite(disk, offset, buffer, NULL);
 }
 
 int block_readwrite(disk disk, block offset, void *readbuf, const void *writebuf)
 {
-	LOG(0, "disk=%p offset=%u readbuf=%p writebuf=%p", disk, offset, readbuf, writebuf);
+	syslog(LOG_DEBUG, "%s%s%s block %u", readbuf ? "reading" : "", (readbuf && writebuf) ? "/" : "", writebuf ? "writing" : "", offset);
 
 	// Offset must be valid
 	if(!BLOCK_VALID(offset)) {
-		ERR(0, "offset block invalid");
+		syslog(LOG_ERR, "invalid block %u", offset);
 		return -1;
 	}
 
@@ -41,14 +41,14 @@ int block_readwrite(disk disk, block offset, void *readbuf, const void *writebuf
 
 	// Seek to block position
 	if(fseek(disk->file, offset * sb->block_size, SEEK_SET) != 0) {
-		ERR(0, "disk seek failed");
+		syslog(LOG_ERR, "failed to seek disk to block %u", offset);
 		return -1;
 	}
 
 	if(readbuf) {
 		// Read entire block
 		if(fread(readbuf, sb->block_size, 1, disk->file) != 1) {
-			ERR(0, "failed to read buffer");
+			syslog(LOG_ERR, "failed to read block %u", offset);
 			return -1;
 		}
 	}
@@ -56,50 +56,45 @@ int block_readwrite(disk disk, block offset, void *readbuf, const void *writebuf
 	if(writebuf) {
 		// Write entire block
 		if(fwrite(writebuf, sb->block_size, 1, disk->file) != 1) {
-			ERR(0, "failed to write buffer");
+			syslog(LOG_ERR, "failed to write block %u", offset);
 			return -1;
 		}
 	}
 
+	syslog(LOG_DEBUG, "%s%s%s block %u", readbuf ? "read" : "", (readbuf && writebuf) ? "/" : "", writebuf ? "wrote" : "", offset);
 	return 0;
 }
 
 // Must be defined here because disk is defined here
 int block_write(disk disk, block offset, const void *buffer)
 {
-	LOG(0, "disk=%p offset=%u buffer=%p", disk, offset, buffer);
 	return block_readwrite(disk, offset, NULL, buffer);
 }
 
-
 int disk_close(disk disk)
 {
-	LOG(1, "disk=%p", disk);
+	syslog(LOG_INFO, "closing disk");
 
     // Must be able to close disk file
     if(fclose(disk->file) != 0) {
-		ERR(1, "disk close failed");
+		syslog(LOG_ERR, "failed to close disk");
         return -1;
     }
 
     // Done using disk
     free(disk);
-
+	syslog(LOG_NOTICE, "closed disk");
     return 0;
 }
 
 int disk_format(disk disk, struct superblock sb)
 {
-	LOG(1, "disk=%p sb={magic=%u block_count=%u fat_block_count=%u block_size=%u root_block=%u}", disk, sb.magic, sb.block_count, sb.block_size, sb.root_block);
-
-	/*
-	   const uint32_t fat_size = block_count * sizeof(uint32_t);
-	   disk->superblock.magic = 0x2345beef;
-	   disk->superblock.block_count = block_count;
-	   disk->superblock.block_size = DISK_BLOCK_SIZE;
-	   disk->superblock.fat_block_count = fat_size / disk->superblock.block_size + (fat_size % disk->superblock.block_size > 0);
-	   disk->superblock.root_block = 1 + disk->superblock.fat_block_count;
-	   */
+	syslog(LOG_INFO, "formating disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
+			sb.magic,
+			sb.block_count,
+			sb.fat_block_count,
+			sb.block_size,
+			sb.root_block);
 
 	disk->superblock = sb;
 
@@ -114,18 +109,12 @@ int disk_format(disk disk, struct superblock sb)
 	// Write superblock on disk
 	memcpy(buffer, &disk->superblock, sizeof(struct superblock));
 	if(block_write(disk, BLOCK_SUPERBLOCK, buffer) != 0) {
-		ERR(1, "superblock write failed");
 		return -1;
 	}
 
 	free(buffer);
 
 	block *fat_buffer = malloc(disk->superblock.block_count * sizeof(block));
-    if(!fat_buffer) {
-		ERR(1, "FAT buffer allocation failed");
-        return -1;
-    }
-
 	for(block i = 0; i < disk->superblock.block_count; ++i) {
 		if(i == disk->superblock.root_block) {
 			fat_buffer[i] = BLOCK_LAST;
@@ -139,7 +128,6 @@ int disk_format(disk disk, struct superblock sb)
 	// Write FAT block by block
 	for(uint32_t i = 0; i < disk->superblock.fat_block_count; ++i) {
 		if(block_write(disk, BLOCK_FAT + i, ((uint8_t *) fat_buffer) + i * disk->superblock.block_size) != 0) {
-			ERR(1, "FAT write failed");
 			free(fat_buffer);
 			return -1;
 		}
@@ -162,22 +150,23 @@ int disk_format(disk disk, struct superblock sb)
 
 	address root = dir_find(disk, "/");
 	if(dir_write(disk, root, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
-		ERR(1, "failed to write root directory");
 		return -1;
 	}
 
+	syslog(LOG_NOTICE, "formatted disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
+			sb.magic,
+			sb.block_count,
+			sb.fat_block_count,
+			sb.block_size,
+			sb.root_block);
 	return 0;
 }
 
 disk disk_open(const char *path)
 {
-	LOG(1, "path=%s", path);
+	syslog(LOG_INFO, "opening disk '%s'", path);
 
     disk disk = malloc(sizeof(struct disk_info));
-    if(!disk) {
-		ERR(1, "disk allocation failed");
-        return NULL;
-    }
 
 	// Open existing or non-existing disk file
 	disk->file = fopen(path, "r+");
@@ -188,7 +177,7 @@ disk disk_open(const char *path)
     // Disk file could not be opened
     if(!disk->file) {
 		free(disk);
-		ERR(1, "file failed to open");
+		syslog(LOG_ERR, "failed to open disk %s", path);
         return NULL;
     }
 
@@ -196,6 +185,7 @@ disk disk_open(const char *path)
 	// Can't use block_read since block size size is unknown
 	fread(&disk->superblock, sizeof(struct superblock), 1, disk->file);
 
+	syslog(LOG_INFO, "opened disk '%s'", path);
     return disk;
 }
 
