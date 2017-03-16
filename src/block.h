@@ -19,7 +19,7 @@
 #define BLOCK_FAT_BLOCK(sb, block)	(BLOCK_FAT + block / BLOCK_FAT_ENTRY_COUNT(sb))
 #define BLOCK_FAT_ENTRY(sb, block)	(block % BLOCK_FAT_ENTRY_COUNT(sb))
 
-// A FAT filesystem block id
+// A filesystem block pointer
 typedef uint32_t block;
 
 // Allocate a block before next
