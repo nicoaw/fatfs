@@ -32,13 +32,13 @@ struct __attribute__((__packed__)) entry {
     uint32_t unused; // Force entry structure size to be 64 bytes
 };
 
-// Find address of child entry in entry directory
-// Returns invalid address on failure
-address entry_find(disk d, address entry, const char *name);
-
 // Allocate size bytes past end of entry
 // Returns amount of bytes allocated
 uint32_t entry_alloc(disk d, address entry, uint32_t size);
+
+// Find address of child entry in entry directory
+// Returns invalid address on failure
+address entry_find(disk d, address entry, const char *name);
 
 // Allocate size bytes before end of entry
 // Returns amount of bytes freed

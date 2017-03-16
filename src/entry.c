@@ -4,35 +4,6 @@
 #include <syslog.h>
 #include <time.h>
 
-// Recursively find address from entry
-// Returns invalid address on failure
-address entry_find(disk d, address entry, const char *name);
-
-address entry_address(disk d, const char *path)
-{
-	syslog(LOG_DEBUG, "finding entry for '%s'", path);
-
-	const struct superblock *sb = disk_superblock(disk);
-
-	// Need mutable path for strtok
-	char *mutable_path = malloc(strlen(path) + 1);
-	strcpy(mutable_path, path);
-
-	const char *name = strtok(mutable_path, "/");
-
-	address root = {disk_superblock(disk)->root_block, sizeof(struct entry)};
-	address result = entry_find(disk, root, name);
-
-	if(DIR_ADDRESS_VALID(sb, result)) {
-		syslog(LOG_DEBUG, "found entry %u:%u for '%s'", result.block, result.offset, path);
-	} else {
-		syslog(LOG_ERR, "no entry found for '%s'", path);
-	}
-
-	free(mutable_path);
-	return result;
-}
-
 uint32_t entry_alloc(disk d, address entry, uint32_t size)
 {
 	syslog(LOG_DEBUG, "allocating %u bytes for entry %u:%u", size, entry.end_block, entry.end_offset);
@@ -88,62 +59,40 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 
 address entry_find(disk d, address entry, const char *name)
 {
+	syslog(LOG_DEBUG, "finding '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
+
 	const struct superblock *sb = disk_superblock(disk);
 
-	// Found entry address
-	if(!name) {
-		return entry;
-	}
-
-	struct entry ent;
-	if(dir_read(disk, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
+	struct entry parent;
+	if(dir_read(d, entry &parent, sizeof(struct entry)) != sizeof(struct entry)) {
 		return DIR_ADDRESS_INVALID;
 	}
 
-	// Needed to avoid integer underflow when calculating chunk size
-	if(ent.size == 0) {
+	// Read all child entries in parent
+	struct entry *children = malloc(parent.size);
+	if(entry_read(d, entry, 0, children, parent.size) != parent.size) {
 		return DIR_ADDRESS_INVALID;
 	}
 
-	address addr = {ent.start_block, sizeof(struct entry)}
-	uint32_t chunk_size = ENTRY_FIRST_CHUNK_SIZE(sb, ent);
+	// Find child entry with correct name
+	for(uint32_t i = 0; i < parent.size / sizeof(struct entry); ++i) {
+		if(strcmp(children[i]->name, name) == 0) {
+			free(children);
 
-	// Scan block by block
-	while(1) {
-		if(!BLOCK_VALID(addr.end_block)) {
-			break;
-		}
-
-
-
-		addr.end_block = block_next(d, addr.end_block);
-		addr.end_offset = sizeof(struct entry);
-	}
-
-	address address = {parent.start_block, 0};
-	uint32_t chunk_size = (parent.size - 1) % sb->block_size;
-	for(; address.block != BLOCK_LAST; address.block = block_next(disk, address.block)) {
-		if(!BLOCK_VALID(address.block)) {
-			return DIR_ADDRESS_INVALID;
-		}
-
-		// Check each child entry in block
-		for(; address.offset < chunk_size; address.offset += sizeof(struct entry)) {
-			struct entry child;
-			if(dir_read(disk, address, DIR_ENTRY_OFFSET, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+			// Get child entry address
+			address addr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
+			addr = dir_seek(d, addr, i * sizeof(struct entry));
+			if(!DIR_ADDRESS_VALID(sb, addr)) {
 				return DIR_ADDRESS_INVALID;
 			}
 
-			if(strcmp(child.name, name) == 0) {
-				const char *next_name = strtok(NULL, "/");
-				return dir_find_impl(disk, address, next_name);
-			}
+			syslog(LOG_DEBUG, "Found '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
+			return addr;
 		}
-
-		chunk_size = sb->block_size;
-		address.offset = 0;
 	}
-
+	
+	free(children);
+	syslog(LOG_ERR, "Failed to find '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
 	return DIR_ADDRESS_INVALID;
 }
 
