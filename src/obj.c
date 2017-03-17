@@ -1,5 +1,6 @@
 #include "disk.h"
 #include "obj.h"
+#include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
 
@@ -12,10 +13,10 @@ int obj_get(disk d, const char *path, address *addr, struct entry *ent)
 {
 	syslog(LOG_DEBUG, "retreiving object '%s'", path);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	char *mutable_path = malloc(strlen(path) + 1); // Need mutable path for strtok
-	strcpy(path, mutable_path);
+	strcpy(mutable_path, path);
 
 	address current = {sb->root_block, sizeof(struct entry)}; // Start at root address
 	const char *name = strtok(mutable_path, "/");
@@ -53,14 +54,14 @@ int obj_make(disk d, const char *path, uint32_t flags)
 {
 	syslog(LOG_DEBUG, "creating object '%s'", path);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	char *basepath = malloc(strlen(path) + 1); // Need mutable path for split
 	strcpy(basepath, path);
 	const char *name = split_path(basepath);
 
 	// Make sure name is not too long
-	if(strlen(name) > DIR_NAME_LENGTH) {
+	if(strlen(name) > ENTRY_NAME_LENGTH) {
 		free(basepath);
 		syslog(LOG_ERR, "object name too long '%s'", name);
 		return -1;
@@ -109,7 +110,7 @@ int obj_remove(disk d, const char *path)
 {
 	syslog(LOG_DEBUG, "removing object '%s'", path);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	char *basepath = malloc(strlen(path) + 1); // Need mutable path for split
 	strcpy(basepath, path);

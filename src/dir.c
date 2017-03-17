@@ -5,17 +5,17 @@
 
 const address DIR_ADDRESS_INVALID = {BLOCK_INVALID, -1};
 
-uint32_t dir_access(disk d, address offset, void *readdata, const void *writedata uint32_t size)
+uint32_t dir_access(disk d, address offset, void *readdata, const void *writedata, uint32_t size)
 {
 	syslog(LOG_DEBUG, "%s%s%s %u bytes reverse from %u:%u",
 			readdata ? "reading" : "",
-			readdata & writedata ? "/" : "",
+			readdata && writedata ? "/" : "",
 			writedata ? "writing" : "",
 			size,
 			offset.end_block, offset.end_offset
 			);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	// Offset cannot be invalid
 	if(!DIR_ADDRESS_VALID(sb, offset)) {
@@ -74,7 +74,7 @@ uint32_t dir_access(disk d, address offset, void *readdata, const void *writedat
 
 	syslog(LOG_DEBUG, "%s%s%s %u bytes reverse from %u:%u",
 			readdata ? "read" : "",
-			readdata & writedata ? "/" : "",
+			readdata && writedata ? "/" : "",
 			writedata ? "wrote" : "",
 			accessed,
 			offset.end_block, offset.end_offset
@@ -88,6 +88,8 @@ address dir_seek(disk d, address addr, uint32_t offset)
 {
 	syslog(LOG_DEBUG, "seeking %u:%u backward by %u", addr.end_block, addr.end_offset, offset);
 
+	const struct superblock *sb = disk_superblock(d);
+
 	uint32_t seeked = 0;
 
 	// Seek data block by block
@@ -97,7 +99,7 @@ address dir_seek(disk d, address addr, uint32_t offset)
 			break;
 		}
 
-		const uint32_t max_seek_size = seeked + offset.end_offset;
+		const uint32_t max_seek_size = seeked + addr.end_offset;
 		if(max_seek_size > offset) {
 			// Done seeking
 			addr.end_offset = offset - seeked;

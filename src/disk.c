@@ -1,6 +1,6 @@
 #include "block.h"
-#include "dir.h"
 #include "disk.h"
+#include "entry.h"
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -136,19 +136,19 @@ int disk_format(disk disk, struct superblock sb)
 
 	// Setup root directory
 	time_t current_time = time(NULL);
-    struct entry directory = {
+    struct entry ent = {
 		.name = "/",
 		.create_time = current_time,
 		.modify_time = current_time,
 		.access_time = current_time,
 		.size = 0,
 		.start_block = BLOCK_LAST,
-		.flags = DIR_DIRECTORY,
+		.flags = ENTRY_DIRECTORY,
 		.unused = 0
     };
 
-	address root = dir_find(disk, "/");
-	if(dir_write(disk, root, DIR_ENTRY_OFFSET, &directory, sizeof(struct entry)) != sizeof(struct entry)) {
+	address root = {sb.root_block, sizeof(struct entry)};
+	if(dir_write(disk, root, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 

@@ -25,7 +25,7 @@ extern const address DIR_ADDRESS_INVALID;
 // Access at most size bytes of data from offset
 // Stops accessing at end of block list
 // Returns amount of bytes accessed
-uint32_t dir_access(disk d, address offset, void *readdata, const void *writedata uint32_t size);
+uint32_t dir_access(disk d, address offset, void *readdata, const void *writedata, uint32_t size);
 
 // Seek an address by offset backwards
 // Returns invalid address on failure

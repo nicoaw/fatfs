@@ -8,7 +8,7 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 {
 	syslog(LOG_DEBUG, "allocating %u bytes for entry %u:%u", size, entry.end_block, entry.end_offset);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	struct entry ent;
 	if(dir_read(d, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
@@ -47,7 +47,7 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 	ent.access_time = t;
 	ent.modify_time = t;
 	ent.size += allocated;
-	if(dir_write(disk, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
+	if(dir_write(d, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
 		// TODO Blocks were allocated but entry cannot access them
 		syslog(LOG_CRIT, "failed to update entry %u:%u", entry.end_block, entry.end_offset);
 		return 0;
@@ -61,10 +61,10 @@ address entry_find(disk d, address entry, const char *name)
 {
 	syslog(LOG_DEBUG, "finding '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	struct entry parent;
-	if(dir_read(d, entry &parent, sizeof(struct entry)) != sizeof(struct entry)) {
+	if(dir_read(d, entry, &parent, sizeof(struct entry)) != sizeof(struct entry)) {
 		return DIR_ADDRESS_INVALID;
 	}
 
@@ -76,7 +76,7 @@ address entry_find(disk d, address entry, const char *name)
 
 	// Find child entry with correct name
 	for(uint32_t i = 0; i < parent.size / sizeof(struct entry); ++i) {
-		if(strcmp(children[i]->name, name) == 0) {
+		if(strcmp(children[i].name, name) == 0) {
 			free(children);
 
 			// Get child entry address
@@ -100,7 +100,7 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 {
 	syslog(LOG_DEBUG, "freeing %u bytes for entry %u:%u", size, entry.end_block, entry.end_offset);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	struct entry ent;
 	if(dir_read(d, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
@@ -148,7 +148,7 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 	ent.access_time = t;
 	ent.modify_time = t;
 	ent.size -= freed;
-	if(dir_write(disk, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
+	if(dir_write(d, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
 		// TODO Blocks were freed but entry still tries to use them
 		syslog(LOG_CRIT, "failed to update entry %u:%u", entry.end_block, entry.end_offset);
 		return 0;
@@ -163,14 +163,14 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 {
 	syslog(LOG_DEBUG, "%s%s%s %u bytes from entry %u:%u at %u",
 			readdata ? "reading" : "",
-			readdata & writedata ? "/" : "",
+			readdata && writedata ? "/" : "",
 			writedata ? "writing" : "",
 			size,
-			offset.end_block, offset.end_offset,
+			entry.end_block, entry.end_offset,
 			offset
 			);
 
-	const struct superblock *sb = disk_superblock(disk);
+	const struct superblock *sb = disk_superblock(d);
 
 	struct entry ent;
 	if(dir_read(d, entry, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
@@ -205,10 +205,10 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 
 	syslog(LOG_DEBUG, "%s%s%s %u bytes from entry %u:%u at %u",
 			readdata ? "read" : "",
-			readdata & writedata ? "/" : "",
+			readdata && writedata ? "/" : "",
 			writedata ? "wrote" : "",
 			accessed,
-			offset.end_block, offset.end_offset,
+			entry.end_block, entry.end_offset,
 			offset
 			);
 
