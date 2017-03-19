@@ -21,7 +21,7 @@ void usage(const char *program);
 
 int main(int argc, char** argv)
 {
-	setlogmask(LOG_UPTO(LOG_INFO));
+	// setlogmask(LOG_UPTO(LOG_INFO));
 	openlog("fatfs", LOG_CONS | LOG_PID, LOG_USER);
 
 	if(argc > 1) {

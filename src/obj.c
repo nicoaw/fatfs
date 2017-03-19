@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <time.h>
 
 // Split path into base path and directory name
 // Path will be updated to base path
@@ -46,7 +47,7 @@ int obj_get(disk d, const char *path, address *addr, struct entry *ent)
 		}
 	}
 
-	syslog(LOG_DEBUG, "retreived object '%s' at %u:%u", path);
+	syslog(LOG_DEBUG, "retreived object '%s' at %u:%u", path, current.end_block, current.end_offset);
 	return 0;
 }
 
@@ -76,7 +77,7 @@ int obj_make(disk d, const char *path, uint32_t flags)
 	}
 
 	// Allocate enough space for new object
-	if(entry_alloc(d, addr, sizeof(struct entry)) != 0) {
+	if(entry_alloc(d, addr, sizeof(struct entry)) != sizeof(struct entry)) {
 		free(basepath);
 		return -1;
 	}
@@ -142,7 +143,7 @@ int obj_remove(disk d, const char *path)
 	}
 
 	// Free last entry space
-	if(entry_free(d, addr, sizeof(struct entry)) != 0) {
+	if(entry_free(d, addr, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 

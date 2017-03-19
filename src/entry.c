@@ -19,12 +19,13 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 	uint32_t block_unallocated = sb->block_size - ENTRY_FIRST_CHUNK_SIZE(sb, ent);
 	uint32_t allocated = 0;
 
+	// Completely unallocated blocks don't exist
+	if(block_unallocated == sb->block_size) {
+		block_unallocated = 0;
+	}
+
 	// Allocate block by block
 	while(1) {
-		if(!BLOCK_VALID(next)) {
-			break;
-		}
-
 		ent.start_block = next;
 
 		const uint32_t max_allocation_size = allocated + block_unallocated;
@@ -39,6 +40,9 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 			// Allocate another block
 			block_unallocated = sb->block_size;
 			next = block_alloc(d, next);
+			if(!BLOCK_VALID(next)) {
+				break;
+			}
 		}
 	}
 
@@ -86,7 +90,12 @@ address entry_find(disk d, address entry, const char *name)
 				return DIR_ADDRESS_INVALID;
 			}
 
-			syslog(LOG_DEBUG, "Found '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
+			syslog(LOG_DEBUG, "Found '%s' in entry %u:%u at %u:%u",
+					name,
+					entry.end_block,
+					entry.end_offset,
+					addr.end_block,
+					addr.end_offset);
 			return addr;
 		}
 	}
@@ -183,7 +192,7 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 		return 0;
 	}
 
-	const uint32_t end_offset = ent.size - offset;
+	const uint32_t end_offset = ent.size - (offset + size);
 	address addr = {ent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, ent)};
 	addr = dir_seek(d, addr, end_offset);
 	if(!DIR_ADDRESS_VALID(sb, addr)) {
