@@ -29,7 +29,7 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 		ent.start_block = next;
 
 		const uint32_t max_allocation_size = allocated + block_unallocated;
-		if(max_allocation_size > size) {
+		if(max_allocation_size >= size) {
 			// Done allocating
 			allocated = size;
 			break;

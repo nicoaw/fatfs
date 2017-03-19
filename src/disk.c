@@ -72,7 +72,7 @@ int block_write(disk disk, block offset, const void *buffer)
 
 int disk_close(disk disk)
 {
-	syslog(LOG_INFO, "closing disk");
+	syslog(LOG_DEBUG, "closing disk");
 
     // Must be able to close disk file
     if(fclose(disk->file) != 0) {
@@ -82,13 +82,13 @@ int disk_close(disk disk)
 
     // Done using disk
     free(disk);
-	syslog(LOG_NOTICE, "closed disk");
+	syslog(LOG_INFO, "closed disk");
     return 0;
 }
 
 int disk_format(disk disk, struct superblock sb)
 {
-	syslog(LOG_INFO, "formating disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
+	syslog(LOG_DEBUG, "formating disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
 			sb.magic,
 			sb.block_count,
 			sb.fat_block_count,
@@ -152,7 +152,7 @@ int disk_format(disk disk, struct superblock sb)
 		return -1;
 	}
 
-	syslog(LOG_NOTICE, "formatted disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
+	syslog(LOG_INFO, "formatted disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
 			sb.magic,
 			sb.block_count,
 			sb.fat_block_count,
@@ -163,7 +163,7 @@ int disk_format(disk disk, struct superblock sb)
 
 disk disk_open(const char *path)
 {
-	syslog(LOG_INFO, "opening disk '%s'", path);
+	syslog(LOG_DEBUG, "opening disk '%s'", path);
 
     disk disk = malloc(sizeof(struct disk_info));
 

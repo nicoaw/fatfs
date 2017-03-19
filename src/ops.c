@@ -11,7 +11,7 @@
 
 int fatfs_getattr(const char *path, struct stat *stats)
 {
-	syslog(LOG_INFO, "retreiving attributes for '%s'", path);
+	syslog(LOG_DEBUG, "retreiving attributes for '%s'", path);
 
 	struct fuse_context *context = fuse_get_context();
 	disk d = FATFS_DISK(fuse_get_context());
@@ -61,7 +61,7 @@ int fatfs_getattr(const char *path, struct stat *stats)
 
 int fatfs_mkdir(const char *path, mode_t mode)
 {
-	syslog(LOG_INFO, "creating directory '%s'", path);
+	syslog(LOG_DEBUG, "creating directory '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 	if(obj_make(d, path, ENTRY_DIRECTORY) != 0) {
@@ -74,7 +74,7 @@ int fatfs_mkdir(const char *path, mode_t mode)
 
 int fatfs_mknod(const char *path, mode_t mode, dev_t dev)
 {
-	syslog(LOG_INFO, "creating file '%s'", path);
+	syslog(LOG_DEBUG, "creating file '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 	if(obj_make(d, path, ENTRY_FILE) != 0) {
@@ -87,7 +87,7 @@ int fatfs_mknod(const char *path, mode_t mode, dev_t dev)
 
 int fatfs_open(const char *path, struct fuse_file_info *file_info)
 {
-	syslog(LOG_INFO, "opening directory '%s'", path);
+	syslog(LOG_DEBUG, "opening directory '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 
@@ -109,7 +109,7 @@ int fatfs_open(const char *path, struct fuse_file_info *file_info)
 
 int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
 {
-	syslog(LOG_INFO, "reading %zu bytes at offset %zd from '%s'", size, offset, path);
+	syslog(LOG_DEBUG, "reading %zu bytes at offset %zd from '%s'", size, offset, path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 
@@ -132,7 +132,7 @@ int fatfs_read(const char *path, char *buffer, size_t size, off_t offset, struct
 
 int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t offset, struct fuse_file_info *file_info)
 {
-	syslog(LOG_INFO, "reading entries for '%s'", path);
+	syslog(LOG_DEBUG, "reading entries for '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 
@@ -163,7 +163,7 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 
 int fatfs_rmdir(const char *path)
 {
-	syslog(LOG_INFO, "removing directory '%s'", path);
+	syslog(LOG_DEBUG, "removing directory '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 	if(obj_remove(d, path) != 0) {
@@ -176,7 +176,7 @@ int fatfs_rmdir(const char *path)
 
 int fatfs_unlink(const char *path)
 {
-	syslog(LOG_INFO, "removing file '%s'", path);
+	syslog(LOG_DEBUG, "removing file '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 	if(obj_remove(d, path) != 0) {
@@ -189,7 +189,7 @@ int fatfs_unlink(const char *path)
 
 int fatfs_utimens(const char *path, const struct timespec tv[2])
 {
-	syslog(LOG_INFO, "updating access and modify times for '%s'", path);
+	syslog(LOG_DEBUG, "updating access and modify times for '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 	const struct superblock *sb = disk_superblock(d);

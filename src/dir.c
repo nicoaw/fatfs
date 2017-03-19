@@ -83,8 +83,6 @@ uint32_t dir_access(disk d, address offset, void *readdata, const void *writedat
 	return accessed;
 }
 
-// TODO addr represents first chunk end
-// find addr offset of last block (like entry)
 address dir_seek(disk d, address addr, uint32_t offset)
 {
 	syslog(LOG_DEBUG, "seeking %u:%u backward by %u", addr.end_block, addr.end_offset, offset);
