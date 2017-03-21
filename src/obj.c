@@ -126,19 +126,30 @@ int obj_remove(disk d, const char *path)
 	}
 
 	// Need to move last entry to the removed one
-	address last = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
-	address removed = entry_find(d, addr, name);
+	address removedaddr = entry_find(d, addr, name);
+	address lastaddr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
 
 	free(basepath);
 
+	// Read removed entry
+	struct entry removed;
+	if(dir_read(d, removedaddr, &removed, sizeof(struct entry)) != sizeof(struct entry)) {
+		return -1;
+	}
+
+	// Free entry contents
+	if(entry_free(d, removedaddr, removed.size) != removed.size) {
+		return -1;
+	}
+
 	// Read last entry
-	struct entry child;
-	if(dir_read(d, last, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+	struct entry last;
+	if(dir_read(d, lastaddr, &last, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 
 	// Write last entry at removed entry
-	if(dir_write(d, removed, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+	if(dir_write(d, removedaddr, &last, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 
