@@ -72,37 +72,34 @@ address entry_find(disk d, address entry, const char *name)
 		return DIR_ADDRESS_INVALID;
 	}
 
-	// Read all child entries in parent
-	struct entry *children = malloc(parent.size);
-	if(entry_read(d, entry, 0, children, parent.size) != parent.size) {
-		return DIR_ADDRESS_INVALID;
-	}
+	address addr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
 
-	// Find child entry with correct name
-	for(uint32_t i = 0; i < parent.size / sizeof(struct entry); ++i) {
-		if(strcmp(children[i].name, name) == 0) {
-			free(children);
+	// Find entry with specified name
+	while(1) {
+		if(!DIR_ADDRESS_VALID(sb, addr)) {
+			break;
+		}
 
-			// Get child entry address
-			address addr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
-			addr = dir_seek(d, addr, i * sizeof(struct entry));
-			if(!DIR_ADDRESS_VALID(sb, addr)) {
-				return DIR_ADDRESS_INVALID;
-			}
+		// Read child entry
+		struct entry child;
+		if(dir_read(d, addr, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+			break;
+		}
 
-			syslog(LOG_DEBUG, "Found '%s' in entry %u:%u at %u:%u",
+		if(strcmp(child.name, name) == 0) {
+			syslog(LOG_DEBUG, "found '%s' in entry %u:%u at %u:%u",
 					name,
 					entry.end_block,
 					entry.end_offset,
 					addr.end_block,
 					addr.end_offset);
-			return addr;
+			break;
 		}
+
+		addr = dir_seek(d, addr, sizeof(struct entry));
 	}
-	
-	free(children);
-	syslog(LOG_ERR, "Failed to find '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
-	return DIR_ADDRESS_INVALID;
+
+	return addr;
 }
 
 uint32_t entry_free(disk d, address entry, uint32_t size)
