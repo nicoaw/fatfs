@@ -9,3 +9,5 @@ set_target_properties(fatfs PROPERTIES
 	RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 	COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64 -pthread"
 	)
+
+install(TARGETS fatfs DESTINATION bin)
