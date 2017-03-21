@@ -174,6 +174,34 @@ int fatfs_rmdir(const char *path)
 	return 0;
 }
 
+int fatfs_truncate(const char *path, off_t size)
+{
+	syslog(LOG_DEBUG, "truncating '%s' to %zd bytes", path, size);
+
+	disk d = FATFS_DISK(fuse_get_context());
+
+	address addr;
+	struct entry ent;
+	if(obj_get(d, path, &addr, &ent) != 0) {
+		return -ENOENT;
+	}
+
+	if(size > ent.size) {
+		const uint32_t amount = size - ent.size;
+		if(entry_alloc(d, addr, amount) != amount) {
+			return -ENOENT;
+		}
+	} else if(size < ent.size) {
+		const uint32_t amount = ent.size - size;
+		if(entry_free(d, addr, amount) != amount) {
+			return -ENOENT;
+		}
+	}
+
+	syslog(LOG_INFO, "truncated '%s' to %zd bytes", path, size);
+	return 0;
+}
+
 int fatfs_unlink(const char *path)
 {
 	syslog(LOG_DEBUG, "removing file '%s'", path);
@@ -192,7 +220,6 @@ int fatfs_utimens(const char *path, const struct timespec tv[2])
 	syslog(LOG_DEBUG, "updating access and modify times for '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
-	const struct superblock *sb = disk_superblock(d);
 
 	address addr;
 	struct entry ent;
@@ -211,4 +238,37 @@ int fatfs_utimens(const char *path, const struct timespec tv[2])
 
 	syslog(LOG_INFO, "updated access and modify times for '%s'", path);
 	return 0;
+}
+
+int fatfs_write(const char *path, const char *buffer, size_t size, off_t offset, struct fuse_file_info *file_info)
+{
+	syslog(LOG_DEBUG, "writing %zu bytes at offset %zd from '%s'", size, offset, path);
+
+	disk d = FATFS_DISK(fuse_get_context());
+
+	address addr;
+	struct entry ent;
+	if(obj_get(d, path, &addr, &ent) != 0) {
+		return -ENOENT;
+	}
+
+	// Offset needs to be positive
+	if(offset < 0) {
+		syslog(LOG_ERR, "invalid offset %zd", offset);
+		return -ENOENT;
+	}
+
+	const uint32_t end = offset + size;
+
+	// Need to allocate more space
+	if(end > ent.size) {
+		const uint32_t amount = end - ent.size;
+		if(entry_alloc(d, addr, amount) != amount) {
+			return -ENOENT;
+		}
+	}
+
+	uint32_t wrote = entry_write(d, addr, offset, buffer, size);
+	syslog(LOG_INFO, "wrote %u bytes at offset %u from '%s'", wrote, offset, path);
+	return wrote;
 }

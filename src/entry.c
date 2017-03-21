@@ -189,12 +189,16 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 		return 0;
 	}
 
-	const uint32_t end_offset = ent.size - (offset + size);
+	const uint32_t end = offset + size;
+	const uint32_t end_offset = end < ent.size ? ent.size - end : 0;
 	address addr = {ent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, ent)};
 	addr = dir_seek(d, addr, end_offset);
 	if(!DIR_ADDRESS_VALID(sb, addr)) {
 		return 0;
 	}
+
+	// Update size since end offset may be cut short
+	size = (ent.size - end_offset) - offset;
 
 	// Perform directory access
 	uint32_t accessed = dir_access(d, addr, readdata, writedata, size);

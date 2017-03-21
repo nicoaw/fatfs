@@ -21,7 +21,7 @@ void usage(const char *program);
 
 int main(int argc, char** argv)
 {
-	setlogmask(LOG_UPTO(LOG_INFO));
+	// setlogmask(LOG_UPTO(LOG_INFO));
 	openlog("fatfs", LOG_CONS | LOG_PID, LOG_USER);
 
 	if(argc > 1) {
@@ -88,8 +88,10 @@ int mount_command(int argc, char **argv)
 		.read = fatfs_read,
 		.readdir = fatfs_readdir,
 		.rmdir = fatfs_rmdir,
+		.truncate = fatfs_truncate,
 		.unlink = fatfs_unlink,
 		.utimens = fatfs_utimens,
+		.write = fatfs_write,
 	};
 
 	// Start fuse with appropriate options
