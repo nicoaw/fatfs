@@ -30,19 +30,10 @@ int fatfs_getattr(const char *path, struct stat *stats)
 	stats->st_uid = context->uid;
 	stats->st_gid = context->gid;
 	stats->st_blksize = sb->block_size;
+	stats->st_blocks = ent.size == 0 ? 0 : (ent.size - 1) / sb->block_size + 1;
 	stats->st_atime = ent.access_time;
 	stats->st_mtime = ent.modify_time;
 	stats->st_ctime = ent.modify_time;
-
-	// Count blocks allocated to file
-	block block = ent.start_block;
-	while(block != BLOCK_LAST) {
-		++stats->st_blocks;
-		block = block_next(d, block);
-		if(block == BLOCK_INVALID) {
-			return -ENOENT;
-		}
-	}
 
 	if(ent.flags & ENTRY_DIRECTORY) {
 		// Directory is a directory
