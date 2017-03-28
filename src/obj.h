@@ -16,4 +16,9 @@ int obj_make(disk d, const char *path, uint32_t flags);
 // Returns non-zero on failure
 int obj_remove(disk d, const char *path);
 
+// Remove entry at path but not its contents
+// Make sure to have a pointer to the contents otherwise they are lost
+// Returns non-zero on failure
+int obj_unlink(disk d, const char *path);
+
 #endif

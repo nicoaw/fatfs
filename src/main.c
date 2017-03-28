@@ -87,6 +87,7 @@ int mount_command(int argc, char **argv)
 		.open = fatfs_open,
 		.read = fatfs_read,
 		.readdir = fatfs_readdir,
+		.rename = fatfs_rename,
 		.rmdir = fatfs_rmdir,
 		.truncate = fatfs_truncate,
 		.unlink = fatfs_unlink,

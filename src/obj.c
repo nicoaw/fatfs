@@ -111,6 +111,28 @@ int obj_remove(disk d, const char *path)
 {
 	syslog(LOG_DEBUG, "removing object '%s'", path);
 
+	address addr;
+	struct entry ent;
+	if(obj_get(d, path, &addr, &ent) != 0) {
+		return -1;
+	}
+
+	if(entry_free(d, addr, ent.size) != ent.size) {
+		return -1;
+	}
+
+	if(obj_unlink(d, path) != 0) {
+		return -1;
+	}
+
+	syslog(LOG_DEBUG, "removed object '%s'", path);
+}
+
+
+int obj_unlink(disk d, const char *path)
+{
+	syslog(LOG_DEBUG, "unlinking object '%s'", path);
+
 	const struct superblock *sb = disk_superblock(d);
 
 	char *basepath = malloc(strlen(path) + 1); // Need mutable path for split
@@ -131,17 +153,6 @@ int obj_remove(disk d, const char *path)
 
 	free(basepath);
 
-	// Read removed entry
-	struct entry removed;
-	if(dir_read(d, removedaddr, &removed, sizeof(struct entry)) != sizeof(struct entry)) {
-		return -1;
-	}
-
-	// Free entry contents
-	if(entry_free(d, removedaddr, removed.size) != removed.size) {
-		return -1;
-	}
-
 	// Read last entry
 	struct entry last;
 	if(dir_read(d, lastaddr, &last, sizeof(struct entry)) != sizeof(struct entry)) {
@@ -158,7 +169,7 @@ int obj_remove(disk d, const char *path)
 		return -1;
 	}
 
-	syslog(LOG_DEBUG, "removed object '%s'", path);
+	syslog(LOG_DEBUG, "unlinked object '%s'", path);
 	return 0;
 }
 

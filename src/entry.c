@@ -122,8 +122,6 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 	uint32_t block_allocated = ENTRY_FIRST_CHUNK_SIZE(sb, ent);
 	uint32_t freed = 0;
 
-	syslog(LOG_CRIT, "before free ent start block %u", ent.start_block);
-
 	// Free block by block
 	while(1) {
 		if(!BLOCK_VALID(ent.start_block)) {
@@ -150,8 +148,6 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 		}
 	}
 
-	syslog(LOG_CRIT, "after free ent start block %u", ent.start_block);
-	
 	// Update size and access and modify times
 	time_t t = time(NULL);
 	ent.access_time = t;

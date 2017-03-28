@@ -152,11 +152,75 @@ int fatfs_readdir(const char *path, void *buffer, fuse_fill_dir_t filler, off_t 
 	return 0;
 }
 
+int fatfs_rename(const char *oldpath, const char *newpath)
+{
+	syslog(LOG_DEBUG, "renaming '%s' to '%s'", oldpath, newpath);
+
+	disk d = FATFS_DISK(fuse_get_context());
+
+	address oldaddr;
+	struct entry oldent;
+	if(obj_get(d, oldpath, &oldaddr, &oldent) != 0) {
+		return -ENOENT;
+	}
+
+	// Rename old entry
+	const char *name = strrchr(newpath, '/') + 1;
+	strcpy(oldent.name, name);
+
+	// Remove entry at new path if it exists
+	struct entry newent;
+	if(obj_get(d, newpath, NULL, &newent) == 0) {
+		if(newent.flags & ENTRY_DIRECTORY) {
+			if(!(oldent.flags & ENTRY_DIRECTORY)) {
+				return -EISDIR;
+			}
+
+			if(newent.size != 0) {
+				return -ENOTEMPTY;
+			}
+		}
+
+		syslog(LOG_NOTICE, "old type %u", oldent.flags & ENTRY_TYPE);
+		syslog(LOG_NOTICE, "new type %u", newent.flags & ENTRY_TYPE);
+
+		if(oldent.flags & ENTRY_TYPE != newent.flags & ENTRY_TYPE) {
+			return -ENOTDIR;
+		}
+
+		if(obj_remove(d, newpath) != 0) {
+			return -ENOENT;
+		}
+	}
+
+	// Move entry from old path to new path
+
+	if(obj_make(d, newpath, 0) != 0) {
+		return -ENOENT;
+	}
+
+	address newaddr;
+	if(obj_get(d, newpath, &newaddr, NULL) != 0) {
+		return -ENOENT;
+	}
+
+	if(dir_write(d, newaddr, &oldent, sizeof(struct entry)) != sizeof(struct entry)) {
+		return -ENOENT;
+	}
+
+	if(obj_unlink(d, oldpath) != 0) {
+		return -ENOENT;
+	}
+
+	syslog(LOG_INFO, "renamed '%s' to '%s'", oldpath, newpath);
+}
+
 int fatfs_rmdir(const char *path)
 {
 	syslog(LOG_DEBUG, "removing directory '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
+
 	if(obj_remove(d, path) != 0) {
 		return -ENOENT;
 	}

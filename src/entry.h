@@ -9,6 +9,7 @@
 // Entry flags
 #define ENTRY_DIRECTORY 1
 #define ENTRY_FILE 2
+#define ENTRY_TYPE (ENTRY_DIRECTORY | ENTRY_FILE)
 
 // Calculate allocated size of first block
 #define ENTRY_FIRST_CHUNK_SIZE(sb, ent) (ent.size == 0 ? 0 : ((ent.size - 1) % sb->block_size + 1))
