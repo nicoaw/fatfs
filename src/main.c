@@ -81,6 +81,7 @@ int mount_command(int argc, char **argv)
 
 	// Implemented fuse operations
 	struct fuse_operations operations = {
+		.chmod = fatfs_chmod,
 		.getattr = fatfs_getattr,
 		.mkdir = fatfs_mkdir,
 		.mknod = fatfs_mknod,

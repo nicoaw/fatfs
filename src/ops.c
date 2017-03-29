@@ -9,6 +9,28 @@
 // Get currently mounted disk from fuse context
 #define FATFS_DISK(context)	(context->private_data)
 
+int fatfs_chmod(const char *path, mode_t mode)
+{
+	syslog(LOG_INFO, "changing permissions for '%s'", path);
+
+	disk d = FATFS_DISK(fuse_get_context());
+
+	address addr;
+	struct entry ent;
+	if(obj_get(d, path, &addr, &ent) != 0) {
+		return -ENOENT;
+	}
+
+	// Update entry mode
+	ent.mode = mode;
+	if(dir_write(d, addr, &ent, sizeof(struct entry)) != sizeof(struct entry)) {
+		return -ENOENT;
+	}
+
+	syslog(LOG_INFO, "changed permissions for '%s'", path);
+	return 0;
+}
+
 int fatfs_getattr(const char *path, struct stat *stats)
 {
 	syslog(LOG_DEBUG, "retreiving attributes for '%s'", path);

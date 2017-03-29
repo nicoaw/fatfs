@@ -5,6 +5,8 @@
 
 // FUSE callback functions
 
+int fatfs_chmod(const char *path, mode_t mode);
+
 int fatfs_getattr(const char *path, struct stat *stats);
 
 int fatfs_mkdir(const char *path, mode_t mode);
