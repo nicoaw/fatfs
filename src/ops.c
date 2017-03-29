@@ -26,7 +26,7 @@ int fatfs_getattr(const char *path, struct stat *stats)
 	// Initially clear stats
 	memset(stats, 0, sizeof(*stats));
 
-	stats->st_mode = S_IFDIR | 0777;
+	stats->st_mode = ent.mode;
 	stats->st_uid = context->uid;
 	stats->st_gid = context->gid;
 	stats->st_blksize = sb->block_size;
@@ -35,13 +35,12 @@ int fatfs_getattr(const char *path, struct stat *stats)
 	stats->st_mtime = ent.modify_time;
 	stats->st_ctime = ent.modify_time;
 
-	if(ent.flags & ENTRY_DIRECTORY) {
+	if(S_ISDIR(ent.mode)) {
 		// Directory is a directory
-		stats->st_mode = S_IFDIR | 0555;
 		stats->st_nlink = 2 + ent.size / sizeof(struct entry); // Count all the . and .. links
-	} else if(ent.flags & ENTRY_FILE) {
+		stats->st_size = stats->st_blksize * stats->st_blocks;
+	} else if(S_ISREG(ent.mode)) {
 		// Directory is a file
-		stats->st_mode = S_IFREG | 0666;
 		stats->st_nlink = 1;
 		stats->st_size = ent.size;
 	}
@@ -55,7 +54,7 @@ int fatfs_mkdir(const char *path, mode_t mode)
 	syslog(LOG_DEBUG, "creating directory '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
-	if(obj_make(d, path, ENTRY_DIRECTORY) != 0) {
+	if(obj_make(d, path, mode | S_IFDIR) != 0) {
 		return -ENOENT;
 	}
 
@@ -68,7 +67,7 @@ int fatfs_mknod(const char *path, mode_t mode, dev_t dev)
 	syslog(LOG_DEBUG, "creating file '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
-	if(obj_make(d, path, ENTRY_FILE) != 0) {
+	if(obj_make(d, path, mode | S_IFREG) != 0) {
 		return -ENOENT;
 	}
 
@@ -89,7 +88,7 @@ int fatfs_open(const char *path, struct fuse_file_info *file_info)
 	}
 
 	// Entry is not a file
-	if(!(ent.flags & ENTRY_FILE)) {
+	if(!S_ISREG(ent.mode)) {
 		syslog(LOG_ERR, "'%s' is not a file", path);
 		return -ENOENT;
 	}
@@ -171,8 +170,8 @@ int fatfs_rename(const char *oldpath, const char *newpath)
 	// Remove entry at new path if it exists
 	struct entry newent;
 	if(obj_get(d, newpath, NULL, &newent) == 0) {
-		if(newent.flags & ENTRY_DIRECTORY) {
-			if(!(oldent.flags & ENTRY_DIRECTORY)) {
+		if(S_ISDIR(newent.mode)) {
+			if(!S_ISDIR(oldent.mode)) {
 				return -EISDIR;
 			}
 
@@ -181,10 +180,7 @@ int fatfs_rename(const char *oldpath, const char *newpath)
 			}
 		}
 
-		syslog(LOG_NOTICE, "old type %u", oldent.flags & ENTRY_TYPE);
-		syslog(LOG_NOTICE, "new type %u", newent.flags & ENTRY_TYPE);
-
-		if(oldent.flags & ENTRY_TYPE != newent.flags & ENTRY_TYPE) {
+		if(S_ISDIR(oldent.mode) && !S_ISDIR(newent.mode)) {
 			return -ENOTDIR;
 		}
 

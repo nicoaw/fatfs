@@ -1,6 +1,7 @@
 #include "block.h"
 #include "disk.h"
 #include "entry.h"
+#include <fuse.h>
 #include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -143,7 +144,7 @@ int disk_format(disk disk, struct superblock sb)
 		.access_time = current_time,
 		.size = 0,
 		.start_block = BLOCK_LAST,
-		.flags = ENTRY_DIRECTORY,
+		.mode = S_IFDIR | S_IRWXU | S_IRGRP | S_IXGRP | S_IXOTH,
 		.unused = 0
     };
 

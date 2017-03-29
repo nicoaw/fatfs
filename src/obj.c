@@ -51,9 +51,9 @@ int obj_get(disk d, const char *path, address *addr, struct entry *ent)
 	return 0;
 }
 
-int obj_make(disk d, const char *path, uint32_t flags)
+int obj_make(disk d, const char *path, uint32_t mode)
 {
-	syslog(LOG_DEBUG, "creating object '%s'", path);
+	syslog(LOG_DEBUG, "creating object '%s' with mode: %u", path, mode);
 
 	const struct superblock *sb = disk_superblock(d);
 
@@ -91,7 +91,7 @@ int obj_make(disk d, const char *path, uint32_t flags)
     	.access_time = t,
     	.size = 0,
     	.start_block = BLOCK_LAST,
-    	.flags = flags,
+    	.mode = mode,
     	.unused = 0,
 	};
 	strcpy(child.name, name);

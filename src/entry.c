@@ -1,4 +1,5 @@
 #include "entry.h"
+#include <fuse.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -69,6 +70,11 @@ address entry_find(disk d, address entry, const char *name)
 
 	struct entry parent;
 	if(dir_read(d, entry, &parent, sizeof(struct entry)) != sizeof(struct entry)) {
+		return DIR_ADDRESS_INVALID;
+	}
+
+	if(!S_ISDIR(parent.mode)) {
+		syslog(LOG_ERR, "entry %u:%u is not directory", entry.end_block, entry.end_offset);
 		return DIR_ADDRESS_INVALID;
 	}
 
