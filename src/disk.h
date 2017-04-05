@@ -1,6 +1,7 @@
 #ifndef DISK_H
 #define DISK_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -26,7 +27,7 @@ int disk_format(disk disk, struct superblock sb);
 
 // Open a FAT filesystem disk
 // Returns NULL on failure
-disk disk_open(const char *path);
+disk disk_open(const char *path, bool truncate);
 
 // Get FAT superblock
 const struct superblock *disk_superblock(const disk disk);

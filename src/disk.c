@@ -100,10 +100,8 @@ int disk_format(disk disk, struct superblock sb)
 	void *buffer = malloc(disk->superblock.block_size);
 	memset(buffer, 0, disk->superblock.block_size);
 
-	// Fill disk with zeros
-	for(block i = 0; i < disk->superblock.block_count; ++i) {
-		block_write(disk, i, buffer);
-	}
+	fseek(disk->file, sb.block_size * sb.block_count - 1, SEEK_SET);
+	fputc('\0', disk->file);
 
 	// Write superblock on disk
 	memcpy(buffer, &disk->superblock, sizeof(struct superblock));
@@ -152,6 +150,8 @@ int disk_format(disk disk, struct superblock sb)
 		return -1;
 	}
 
+
+
 	syslog(LOG_NOTICE, "formatted disk: magic %x, block count %u, fat_block_count %u, block size %u, root block %u",
 			sb.magic,
 			sb.block_count,
@@ -161,14 +161,19 @@ int disk_format(disk disk, struct superblock sb)
 	return 0;
 }
 
-disk disk_open(const char *path)
+disk disk_open(const char *path, bool truncate)
 {
 	syslog(LOG_INFO, "opening disk '%s'", path);
 
     disk disk = malloc(sizeof(struct disk_info));
+	disk->file = NULL;
 
-	// Open existing or non-existing disk file
-	disk->file = fopen(path, "r+");
+	// Open disk file
+	if(!truncate) {
+		disk->file = fopen(path, "r+");
+	}
+
+	// Open disk file and truncate when disk file was not opened
 	if(!disk->file) {
 		disk->file = fopen(path, "w+");
 	}
