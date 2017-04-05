@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
+#include <time.h>
 
 // Split path into base path and directory name
 // Path will be updated to base path

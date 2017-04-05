@@ -1,13 +1,26 @@
-#define FUSE_USE_VERSION 26
+#include "cmd.h"
+#include "param.h"
 
-#include "block.h"
-#include "disk.h"
-#include "ops.h"
-#include <unistd.h>
-#include <stdio.h>
-#include <string.h>
-#include <syslog.h>
+int main(int argc, char **argv) {
+	struct fatfs_params params;
+	param_parse(&params, argc, argv);
 
+	switch(params.cmd) {
+		case CMD_FORMAT:
+			return cmd_format(&params);
+		case CMD_HELP:
+			return cmd_help(&params);
+		case CMD_MOUNT:
+			return cmd_mount(&params);
+		case CMD_VERSION:
+			return cmd_version(&params);
+		default:
+			cmd_help(&params);
+			return -1;
+	}
+}
+
+/*
 // Format a disk
 // Returns non-zero on failure
 int format_command(int argc, char **argv);
@@ -17,33 +30,42 @@ int format_command(int argc, char **argv);
 int mount_command(int argc, char **argv);
 
 // Print program usage
-void usage(const char *program);
+void usage(const char *program, const char *command);
 
 int main(int argc, char** argv)
 {
+	int err = -1;
+
 	setlogmask(LOG_UPTO(LOG_INFO));
 	openlog("fatfs", LOG_CONS | LOG_PID, LOG_USER);
 
 	if(argc > 1) {
 		const char *command = argv[1];
-		int result;
 
 		if(strcmp(command, "format") == 0) {
-			result = format_command(argc, argv);
+			err = format_command(argc, argv);
 		} else if(strcmp(command, "mount") == 0) {
-			result = mount_command(argc, argv);
-		}
+			err = mount_command(argc, argv);
+		} else {
+			if(strcmp(command, "-h") == 0 || strcmp(command, "--help") == 0) {
+				err = 0;
+			}
 
-		closelog();
-		return result;
+			usage(argv[0], NULL);
+		}
+	} else {
+		usage(argv[0], NULL);
 	}
 
-	usage(argv[0]);
+	closelog();
 	return -1;
 }
 
 int format_command(int argc, char **argv)
 {
+	if(argc > 3) {
+		const char *path = 
+	}
 	const char *path = argv[argc - 1];
 	disk disk = disk_open(path);
 
@@ -102,3 +124,4 @@ void usage(const char *program)
 {
 	fprintf(stderr, "%s (format|mount) <disk> [OPTIONS...]\n", program);
 }
+*/
