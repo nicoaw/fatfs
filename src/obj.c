@@ -47,13 +47,13 @@ int obj_get(disk d, const char *path, address *addr, struct entry *ent)
 		}
 	}
 
-	syslog(LOG_DEBUG, "retreived object '%s' at %u:%u", path);
+	syslog(LOG_DEBUG, "retreived object '%s' at %u:%u", path, current.end_block, current.end_offset);
 	return 0;
 }
 
-int obj_make(disk d, const char *path, uint32_t flags)
+int obj_make(disk d, const char *path, uint32_t mode)
 {
-	syslog(LOG_DEBUG, "creating object '%s'", path);
+	syslog(LOG_DEBUG, "creating object '%s' with mode: %u", path, mode);
 
 	const struct superblock *sb = disk_superblock(d);
 
@@ -77,7 +77,7 @@ int obj_make(disk d, const char *path, uint32_t flags)
 	}
 
 	// Allocate enough space for new object
-	if(entry_alloc(d, addr, sizeof(struct entry)) != 0) {
+	if(entry_alloc(d, addr, sizeof(struct entry)) != sizeof(struct entry)) {
 		free(basepath);
 		return -1;
 	}
@@ -91,7 +91,7 @@ int obj_make(disk d, const char *path, uint32_t flags)
     	.access_time = t,
     	.size = 0,
     	.start_block = BLOCK_LAST,
-    	.flags = flags,
+    	.mode = mode,
     	.unused = 0,
 	};
 	strcpy(child.name, name);
@@ -111,6 +111,28 @@ int obj_remove(disk d, const char *path)
 {
 	syslog(LOG_DEBUG, "removing object '%s'", path);
 
+	address addr;
+	struct entry ent;
+	if(obj_get(d, path, &addr, &ent) != 0) {
+		return -1;
+	}
+
+	if(entry_free(d, addr, ent.size) != ent.size) {
+		return -1;
+	}
+
+	if(obj_unlink(d, path) != 0) {
+		return -1;
+	}
+
+	syslog(LOG_DEBUG, "removed object '%s'", path);
+}
+
+
+int obj_unlink(disk d, const char *path)
+{
+	syslog(LOG_DEBUG, "unlinking object '%s'", path);
+
 	const struct superblock *sb = disk_superblock(d);
 
 	char *basepath = malloc(strlen(path) + 1); // Need mutable path for split
@@ -126,28 +148,28 @@ int obj_remove(disk d, const char *path)
 	}
 
 	// Need to move last entry to the removed one
-	address last = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
-	address removed = entry_find(d, addr, name);
+	address removedaddr = entry_find(d, addr, name);
+	address lastaddr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
 
 	free(basepath);
 
 	// Read last entry
-	struct entry child;
-	if(dir_read(d, last, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+	struct entry last;
+	if(dir_read(d, lastaddr, &last, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 
 	// Write last entry at removed entry
-	if(dir_write(d, removed, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+	if(dir_write(d, removedaddr, &last, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 
 	// Free last entry space
-	if(entry_free(d, addr, sizeof(struct entry)) != 0) {
+	if(entry_free(d, addr, sizeof(struct entry)) != sizeof(struct entry)) {
 		return -1;
 	}
 
-	syslog(LOG_DEBUG, "removed object '%s'", path);
+	syslog(LOG_DEBUG, "unlinked object '%s'", path);
 	return 0;
 }
 

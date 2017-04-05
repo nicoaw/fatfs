@@ -40,7 +40,7 @@ uint32_t dir_access(disk d, address offset, void *readdata, const void *writedat
 
 		// Access boundaries
 		const uint32_t max_access_size = accessed + offset.end_offset;
-		const uint32_t block_offset = max_access_size > size ? size - accessed : 0;
+		const uint32_t block_offset = max_access_size > size ? offset.end_offset - (size - accessed) : 0;
 		const uint32_t data_size = offset.end_offset - block_offset;
 		const uint32_t data_offset = size - (accessed + data_size);
 
@@ -72,12 +72,11 @@ uint32_t dir_access(disk d, address offset, void *readdata, const void *writedat
 		offset.end_offset = sb->block_size;
 	}
 
-	syslog(LOG_DEBUG, "%s%s%s %u bytes reverse from %u:%u",
+	syslog(LOG_DEBUG, "%s%s%s %u bytes reverse",
 			readdata ? "read" : "",
 			readdata && writedata ? "/" : "",
 			writedata ? "wrote" : "",
-			accessed,
-			offset.end_block, offset.end_offset
+			accessed
 			);
 
 	free(buffer);
@@ -100,9 +99,9 @@ address dir_seek(disk d, address addr, uint32_t offset)
 		}
 
 		const uint32_t max_seek_size = seeked + addr.end_offset;
-		if(max_seek_size > offset) {
+		if(max_seek_size >= offset) {
 			// Done seeking
-			addr.end_offset = offset - seeked;
+			addr.end_offset -= offset - seeked;
 			break;
 		} else {
 			// Seek next address

@@ -6,10 +6,6 @@
 // Maximum entry name length
 #define ENTRY_NAME_LENGTH 23
 
-// Entry flags
-#define ENTRY_DIRECTORY 1
-#define ENTRY_FILE 2
-
 // Calculate allocated size of first block
 #define ENTRY_FIRST_CHUNK_SIZE(sb, ent) (ent.size == 0 ? 0 : ((ent.size - 1) % sb->block_size + 1))
 
@@ -28,7 +24,7 @@ struct __attribute__((__packed__)) entry {
     uint64_t access_time;
     uint32_t size; // Size of directory in bytes
     uint32_t start_block; // First block in directory
-    uint32_t flags; // Bitset of entry flags
+    uint32_t mode; // mode_t bitset
     uint32_t unused; // Force entry structure size to be 64 bytes
 };
 

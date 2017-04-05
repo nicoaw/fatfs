@@ -1,4 +1,5 @@
 #include "entry.h"
+#include <fuse.h>
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
@@ -19,16 +20,17 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 	uint32_t block_unallocated = sb->block_size - ENTRY_FIRST_CHUNK_SIZE(sb, ent);
 	uint32_t allocated = 0;
 
+	// Completely unallocated blocks don't exist
+	if(block_unallocated == sb->block_size) {
+		block_unallocated = 0;
+	}
+
 	// Allocate block by block
 	while(1) {
-		if(!BLOCK_VALID(next)) {
-			break;
-		}
-
 		ent.start_block = next;
 
 		const uint32_t max_allocation_size = allocated + block_unallocated;
-		if(max_allocation_size > size) {
+		if(max_allocation_size >= size) {
 			// Done allocating
 			allocated = size;
 			break;
@@ -39,6 +41,9 @@ uint32_t entry_alloc(disk d, address entry, uint32_t size)
 			// Allocate another block
 			block_unallocated = sb->block_size;
 			next = block_alloc(d, next);
+			if(!BLOCK_VALID(next)) {
+				break;
+			}
 		}
 	}
 
@@ -68,32 +73,39 @@ address entry_find(disk d, address entry, const char *name)
 		return DIR_ADDRESS_INVALID;
 	}
 
-	// Read all child entries in parent
-	struct entry *children = malloc(parent.size);
-	if(entry_read(d, entry, 0, children, parent.size) != parent.size) {
+	if(!S_ISDIR(parent.mode)) {
+		syslog(LOG_ERR, "entry %u:%u is not directory", entry.end_block, entry.end_offset);
 		return DIR_ADDRESS_INVALID;
 	}
 
-	// Find child entry with correct name
-	for(uint32_t i = 0; i < parent.size / sizeof(struct entry); ++i) {
-		if(strcmp(children[i].name, name) == 0) {
-			free(children);
+	address addr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
 
-			// Get child entry address
-			address addr = {parent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, parent)};
-			addr = dir_seek(d, addr, i * sizeof(struct entry));
-			if(!DIR_ADDRESS_VALID(sb, addr)) {
-				return DIR_ADDRESS_INVALID;
-			}
-
-			syslog(LOG_DEBUG, "Found '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
-			return addr;
+	// Find entry with specified name
+	while(1) {
+		if(!DIR_ADDRESS_VALID(sb, addr)) {
+			break;
 		}
+
+		// Read child entry
+		struct entry child;
+		if(dir_read(d, addr, &child, sizeof(struct entry)) != sizeof(struct entry)) {
+			break;
+		}
+
+		if(strcmp(child.name, name) == 0) {
+			syslog(LOG_DEBUG, "found '%s' in entry %u:%u at %u:%u",
+					name,
+					entry.end_block,
+					entry.end_offset,
+					addr.end_block,
+					addr.end_offset);
+			break;
+		}
+
+		addr = dir_seek(d, addr, sizeof(struct entry));
 	}
-	
-	free(children);
-	syslog(LOG_ERR, "Failed to find '%s' in entry %u:%u", name, entry.end_block, entry.end_offset);
-	return DIR_ADDRESS_INVALID;
+
+	return addr;
 }
 
 uint32_t entry_free(disk d, address entry, uint32_t size)
@@ -113,13 +125,12 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 		return 0;
 	}
 
-	block next = ent.start_block;
 	uint32_t block_allocated = ENTRY_FIRST_CHUNK_SIZE(sb, ent);
 	uint32_t freed = 0;
 
 	// Free block by block
 	while(1) {
-		if(!BLOCK_VALID(next)) {
+		if(!BLOCK_VALID(ent.start_block)) {
 			break;
 		}
 
@@ -129,20 +140,20 @@ uint32_t entry_free(disk d, address entry, uint32_t size)
 			freed = size;
 			break;
 		} else {
+			block next = block_next(d, ent.start_block);
+
 			// Free block
 			if(block_free(d, ent.start_block) != 0) {
 				break;
 			}
 
-			ent.start_block = next;
-			freed += block_allocated;
-
 			// Update next block information
+			freed += block_allocated;
 			block_allocated = sb->block_size;
-			next = block_next(d, next);
+			ent.start_block = next;
 		}
 	}
-	
+
 	// Update size and access and modify times
 	time_t t = time(NULL);
 	ent.access_time = t;
@@ -183,12 +194,16 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 		return 0;
 	}
 
-	const uint32_t end_offset = ent.size - offset;
+	const uint32_t end = offset + size;
+	const uint32_t end_offset = end < ent.size ? ent.size - end : 0;
 	address addr = {ent.start_block, ENTRY_FIRST_CHUNK_SIZE(sb, ent)};
 	addr = dir_seek(d, addr, end_offset);
 	if(!DIR_ADDRESS_VALID(sb, addr)) {
 		return 0;
 	}
+
+	// Update size since end offset may be cut short
+	size = (ent.size - end_offset) - offset;
 
 	// Perform directory access
 	uint32_t accessed = dir_access(d, addr, readdata, writedata, size);

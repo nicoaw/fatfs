@@ -6,10 +6,6 @@ cmake_install.cmake
 install_manifest.txt
 CTestTestfile.cmake
 bin
-lib
 *.vim
 *.swp
 *.swo
-*.sh
-disk.fatfs
-mnt.fatfs
