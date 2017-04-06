@@ -94,15 +94,19 @@ int cmd_mount(struct fatfs_params *params)
 	}
 
 	struct fuse_operations operations = {
+		.chmod = fatfs_chmod,
 		.getattr = fatfs_getattr,
 		.mkdir = fatfs_mkdir,
 		.mknod = fatfs_mknod,
 		.open = fatfs_open,
 		.read = fatfs_read,
 		.readdir = fatfs_readdir,
+		.rename = fatfs_rename,
 		.rmdir = fatfs_rmdir,
+		.truncate = fatfs_truncate,
 		.unlink = fatfs_unlink,
 		.utimens = fatfs_utimens,
+		.write = fatfs_write,
 	};
 
 	disk d = disk_open(params->disk_path, false);
