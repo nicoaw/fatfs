@@ -36,7 +36,7 @@ Example usage
 
 ```
 $ mkdir mnt
-$ fatfs format disk            # Initialize file called "disk" with an empty fatfs filesystem 
+$ fatfs format disk 1G      # Initialize file called "disk" with an empty 1GiB fatfs filesystem 
 $ fatfs mount disk mnt    # Now "mnt" is the root directory of the fatfs filesystem in "disk"
 ...
 $ sudo umount mnt         # Unmount filesystem when done
