@@ -3,13 +3,11 @@
 #include "disk.h"
 #include "ops.h"
 #include <stdio.h>
+#include <syslog.h>
 
 #define FATFS_VERSION "1.0.0"
 
 #define FATFS_CEIL(a, b) (1 + ((a - 1) / b))
-
-// Update superblock fat block count
-void update_fat_block_count(struct superblock *sb);
 
 // Print usage
 void usage(struct fatfs_params *params);
@@ -21,6 +19,8 @@ int cmd_format(struct fatfs_params *params)
 		usage(params);
 		return -1;
 	}
+
+	// TODO use different method to determine size to avoid overflow
 
 	// Determine input size power
 	int power = 0;
@@ -44,7 +44,7 @@ int cmd_format(struct fatfs_params *params)
 			return -1;
 	}
 
-	// Actual size in bytes
+	// Actual size in bytes of entire filesystem
 	uintmax_t size = 1;
 	for(int i = 0; i < power; ++i) {
 		size *= 1024;
@@ -55,13 +55,16 @@ int cmd_format(struct fatfs_params *params)
 	struct superblock sb;
 	sb.magic = 0x2345beef;
 	sb.block_size = params->block_size;
-
-	sb.block_count = FATFS_CEIL(size, sb.block_size); // Blocks needed for files
-	update_fat_block_count(&sb);
-	sb.block_count += 2 + sb.fat_block_count; // Blocks needed for filesystem
-	update_fat_block_count(&sb);
-
+	sb.block_count = FATFS_CEIL(size, sb.block_size);
+	const uint32_t fat_size = sb.block_count * sizeof(block);
+	sb.fat_block_count = FATFS_CEIL(fat_size, sb.block_size);
 	sb.root_block = sb.fat_block_count + 1;
+
+	const uint32_t min_block_count = 2 + sb.fat_block_count;  // Min block count to support filesystem metadata
+	if(sb.block_count < min_block_count) {
+		fprintf(stderr, "filesystem too small: need at least %u bytes\n", min_block_count * sb.block_size);
+		return -1;
+	}
 
 	disk d = disk_open(params->disk_path, true);
 	if(!d) {
@@ -118,12 +121,6 @@ int cmd_version(struct fatfs_params *params)
 	fuse_opt_add_arg(&params->args, "--version");
 	fuse_main(params->args.argc, params->args.argv, NULL, NULL);
 	return 0;
-}
-
-void update_fat_block_count(struct superblock *sb)
-{
-	const uint32_t fat_size = sb->block_count * sizeof(block);
-	sb->fat_block_count = FATFS_CEIL(fat_size, sb->block_size);
 }
 
 void usage(struct fatfs_params *params)

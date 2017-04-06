@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #define FATFS_OPT(t, p, v) {t, offsetof(struct fatfs_params, p), v}
 
@@ -48,8 +49,8 @@ int param_parse(struct fatfs_params *outparams, int argc, char **argv)
 {
 	struct fuse_opt options[] = {
 		// Format Options
-		FATFS_OPT("-b %u", block_size, 1024),
-		FATFS_OPT("--block_size=%u", block_size, 1024),
+		FATFS_OPT("-b %u", block_size, 0),
+		FATFS_OPT("--block_size=%u", block_size, 0),
 
 		// General options
 		FUSE_OPT_KEY("-V", KEY_VERSION),
@@ -61,7 +62,10 @@ int param_parse(struct fatfs_params *outparams, int argc, char **argv)
 	};
 
 	struct fatfs_params params = FATFS_PARAMS_INIT(argc, argv);
-	params.block_size = 1024; // block size defaults to 1024
+
+	struct stat st;
+	stat("/", &st);
+	params.block_size = st.st_blksize; // block size defaults host filesystem block size
 
 	int err = fuse_opt_parse(&params.args, &params, options, &opt_proc);
 	*outparams = params;

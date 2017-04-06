@@ -11,7 +11,7 @@
 
 int fatfs_chmod(const char *path, mode_t mode)
 {
-	syslog(LOG_INFO, "changing permissions for '%s'", path);
+	syslog(LOG_DEBUG, "changing permissions for '%s'", path);
 
 	disk d = FATFS_DISK(fuse_get_context());
 

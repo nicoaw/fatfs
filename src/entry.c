@@ -190,7 +190,7 @@ uint32_t entry_access(disk d, address entry, uint32_t offset, void *readdata, co
 
 	// Offset cannot be past directory end
 	if(offset >= ent.size) {
-		syslog(LOG_ERR, "offset %u out of directory range %u", offset, ent.size);
+		syslog(LOG_WARNING, "offset %u out of entry %u:%u range %u", offset, entry.end_block, entry.end_offset, ent.size);
 		return 0;
 	}
 
