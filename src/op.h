@@ -1,5 +1,5 @@
-#ifndef OPS_H
-#define OPS_H
+#ifndef OP_H
+#define OP_H
 
 #include <fuse/fuse.h>
 

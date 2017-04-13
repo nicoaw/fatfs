@@ -1,7 +1,7 @@
 #include "block.h"
 #include "cmd.h"
 #include "disk.h"
-#include "ops.h"
+#include "op.h"
 #include <stdio.h>
 #include <syslog.h>
 
